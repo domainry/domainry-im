@@ -1,0 +1,107 @@
+package config
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+type Config struct {
+	ListenAddress               string
+	DatabasePath                string
+	SQLiteBusyTimeout           time.Duration
+	SQLiteMaxOpenConnections    int
+	SSEPollInterval             time.Duration
+	SSEHeartbeat                time.Duration
+	IdentityEndpoint            string
+	IdentityIssuer              string
+	IdentityWorkspaceID         string
+	IdentityApplicationKey      string
+	IdentityServiceAccessToken  string
+	KnowledgeEndpoint           string
+	KnowledgeRuntimeID          string
+	KnowledgeServiceAccessToken string
+}
+
+func FromEnvironment() (Config, error) {
+	busyTimeout, err := durationValue("DOMAINRY_IM_SQLITE_BUSY_TIMEOUT", 5*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	poll, err := durationValue("DOMAINRY_IM_SSE_POLL_INTERVAL", 2*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	heartbeat, err := durationValue("DOMAINRY_IM_SSE_HEARTBEAT", 15*time.Second)
+	if err != nil {
+		return Config{}, err
+	}
+	maxOpen, err := integerValue("DOMAINRY_IM_SQLITE_MAX_OPEN_CONNECTIONS", 8)
+	if err != nil {
+		return Config{}, err
+	}
+	applicationKey := defaultValue("DOMAINRY_IM_APPLICATION_KEY", "domainry-im")
+	settings := Config{
+		ListenAddress:               defaultValue("DOMAINRY_IM_LISTEN_ADDRESS", ":8092"),
+		DatabasePath:                defaultValue("DOMAINRY_IM_DATABASE_PATH", "./data/domainry-im.db"),
+		SQLiteBusyTimeout:           busyTimeout,
+		SQLiteMaxOpenConnections:    maxOpen,
+		SSEPollInterval:             poll,
+		SSEHeartbeat:                heartbeat,
+		IdentityEndpoint:            strings.TrimSpace(os.Getenv("DOMAINRY_IM_IDENTITY_ENDPOINT")),
+		IdentityIssuer:              strings.TrimSpace(os.Getenv("DOMAINRY_IM_IDENTITY_ISSUER")),
+		IdentityWorkspaceID:         strings.TrimSpace(os.Getenv("DOMAINRY_IM_WORKSPACE_ID")),
+		IdentityApplicationKey:      applicationKey,
+		IdentityServiceAccessToken:  strings.TrimSpace(os.Getenv("DOMAINRY_IM_IDENTITY_SERVICE_TOKEN")),
+		KnowledgeEndpoint:           strings.TrimSpace(os.Getenv("DOMAINRY_IM_KNOWLEDGE_ENDPOINT")),
+		KnowledgeRuntimeID:          defaultValue("DOMAINRY_IM_KNOWLEDGE_RUNTIME_ID", applicationKey),
+		KnowledgeServiceAccessToken: strings.TrimSpace(os.Getenv("DOMAINRY_IM_KNOWLEDGE_SERVICE_TOKEN")),
+	}
+	if settings.IdentityEndpoint == "" || settings.IdentityIssuer == "" || settings.IdentityWorkspaceID == "" {
+		return Config{}, errors.New("Domainry Identity endpoint, issuer, and workspace ID are required")
+	}
+	if settings.KnowledgeEndpoint == "" || settings.KnowledgeRuntimeID == "" || settings.KnowledgeServiceAccessToken == "" {
+		return Config{}, errors.New("Domainry Knowledge endpoint, Runtime ID, and service token are required")
+	}
+	if settings.DatabasePath == "" || settings.SQLiteBusyTimeout <= 0 || settings.SQLiteMaxOpenConnections < 1 {
+		return Config{}, errors.New("valid SQLite settings are required")
+	}
+	if settings.SSEPollInterval < 250*time.Millisecond || settings.SSEPollInterval > time.Minute || settings.SSEHeartbeat < 5*time.Second || settings.SSEHeartbeat > time.Minute {
+		return Config{}, errors.New("valid SSE settings are required")
+	}
+	return settings, nil
+}
+
+func defaultValue(name, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func durationValue(name string, fallback time.Duration) (time.Duration, error) {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a valid duration: %w", name, err)
+	}
+	return parsed, nil
+}
+
+func integerValue(name string, fallback int) (int, error) {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be an integer: %w", name, err)
+	}
+	return parsed, nil
+}
