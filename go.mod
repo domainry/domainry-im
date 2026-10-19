@@ -7,7 +7,7 @@ toolchain go1.26.5
 require (
 	github.com/domainry/domainry-foundation v0.1.44
 	github.com/domainry/domainry-identity-sdk v0.1.22
-	github.com/domainry/domainry-knowledge-sdk v0.1.13
+	github.com/domainry/domainry-knowledge-sdk v0.1.14
 	github.com/domainry/domainry-orm v0.1.33
 	modernc.org/sqlite v1.57.0
 )
