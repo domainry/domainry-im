@@ -1,6 +1,9 @@
 package model
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 var (
 	ErrThreadNotFound     = errors.New("IM thread not found")
@@ -31,6 +34,22 @@ func (e *Error) Unwrap() error {
 	}
 	return e.Cause
 }
+
+func (e *Error) ApplicationErrorKind() string {
+	if e == nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(e.Class))
+}
+
+func (e *Error) ErrorCode() string {
+	if e == nil {
+		return ""
+	}
+	return strings.TrimSpace(e.Code)
+}
+
+func (*Error) ErrorParams() map[string]string { return nil }
 
 func Invalid(code string) error { return &Error{Class: "bad_request", Code: code} }
 
