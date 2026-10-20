@@ -242,7 +242,7 @@ func writeAttachment(w http.ResponseWriter, attachment model.Attachment, content
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, content); err != nil {
-		telemetry.RecordHTTPError(w, "internal", "im.attachment_stream_failed")
+		telemetry.RecordHTTPError(w, "internal", "im.attachment_stream_failed", err)
 	}
 }
 
@@ -399,7 +399,7 @@ func writeResult(w http.ResponseWriter, r *http.Request, status int, value any, 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(value); err != nil {
-		telemetry.RecordHTTPError(w, "internal", "im.response_encode_failed")
+		telemetry.RecordHTTPError(w, "internal", "im.response_encode_failed", err)
 	}
 }
 
@@ -423,7 +423,7 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 			status = http.StatusServiceUnavailable
 		}
 	}
-	telemetry.RecordHTTPError(w, applicationErrorKind(applicationError, status), code)
+	telemetry.RecordHTTPError(w, applicationErrorKind(applicationError, status), code, err)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": code}})
