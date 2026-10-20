@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/domainry/domainry-foundation/logging"
 	"github.com/domainry/domainry-foundation/processhost"
 	"github.com/domainry/domainry-im/internal/assembly/saas"
 	"github.com/domainry/domainry-im/internal/infrastructure/config"
@@ -27,19 +29,35 @@ func run() (runErr error) {
 	if err != nil {
 		return err
 	}
-	defer func() { runErr = observability.Finish(context.Background(), nil, runErr) }()
+	started := false
+	startupFailure := logging.Failure{Stage: "configuration_load"}
+	defer func() {
+		if !started && runErr != nil {
+			observability.StartFailed(context.Background(), runErr, startupFailure)
+			runErr = errors.Join(runErr, observability.Close(context.Background(), nil))
+			return
+		}
+		runErr = observability.Finish(context.Background(), nil, runErr)
+	}()
 	settings, err := config.FromEnvironment()
 	if err != nil {
 		return err
 	}
+	startupFailure = logging.Failure{Stage: "module_assembly"}
 	service, err := saas.Open(ctx, settings)
 	if err != nil {
 		return err
 	}
 	defer service.Close(context.Background())
 	server := &http.Server{Addr: settings.ListenAddress, Handler: observability.Handler("public", service.Handler()), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
+	startupFailure = logging.Failure{Stage: "listener_bind", Dependency: "public_listener"}
+	listener, err := net.Listen("tcp", settings.ListenAddress)
+	if err != nil {
+		return err
+	}
 	result := make(chan error, 1)
-	go func() { result <- server.ListenAndServe() }()
+	go func() { result <- server.Serve(listener) }()
+	started = true
 	observability.Started(ctx, map[string]any{"listener_group": "public"})
 	select {
 	case err := <-result:

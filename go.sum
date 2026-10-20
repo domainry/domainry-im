@@ -6,6 +6,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/domainry/domainry-foundation v0.2.8 h1:1nV6HkG2DcobBEaSdwP7cVOzU8UEAVymXFqxkKGqHno=
 github.com/domainry/domainry-foundation v0.2.8/go.mod h1:nCw272N/NTkHfJNWvAGL8vZybUtOpgw3ZyCIshRSqF4=
+github.com/domainry/domainry-foundation v0.2.9 h1:6W2EveLotmAEotfjfSyS5Ldh2EwMwhZ7AsnRypcoKOA=
+github.com/domainry/domainry-foundation v0.2.9/go.mod h1:nCw272N/NTkHfJNWvAGL8vZybUtOpgw3ZyCIshRSqF4=
 github.com/domainry/domainry-identity-sdk v0.1.26 h1:Bf7MMVUdYyutojuHHfj3ga5wo5fHLI2mH6CYNZTha1k=
 github.com/domainry/domainry-identity-sdk v0.1.26/go.mod h1:0QapTgC0Shl63uBZAdIAQ49BPB2cB31C4RrkQX6eiEw=
 github.com/domainry/domainry-knowledge-sdk v0.1.17 h1:4AQxVHenWwzO3aE+efi4WBPPheqSg9SA6iBRq/ob0Sc=
