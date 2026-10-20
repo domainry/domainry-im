@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/httpresponse"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/telemetry"
 	imapplication "github.com/domainry/domainry-im/internal/application/im"
@@ -396,11 +397,7 @@ func writeResult(w http.ResponseWriter, r *http.Request, status int, value any, 
 		writeError(w, r, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(value); err != nil {
-		telemetry.RecordHTTPError(w, "internal", "im.response_encode_failed", err)
-	}
+	httpresponse.WriteJSON(w, status, value)
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
@@ -423,18 +420,5 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 			status = http.StatusServiceUnavailable
 		}
 	}
-	telemetry.RecordHTTPError(w, applicationErrorKind(applicationError, status), code, err)
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": code}})
-}
-
-func applicationErrorKind(applicationError *model.Error, status int) string {
-	if applicationError != nil && strings.TrimSpace(applicationError.Class) != "" {
-		return applicationError.Class
-	}
-	if status >= http.StatusInternalServerError {
-		return "internal"
-	}
-	return "bad_request"
+	httpresponse.WriteError(w, r, httpresponse.Failure{Status: status, Code: code, Cause: err})
 }

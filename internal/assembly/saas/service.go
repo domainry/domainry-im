@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/domainry/domainry-foundation/httpresponse"
 	identitysdk "github.com/domainry/domainry-identity-sdk"
 	identityprincipal "github.com/domainry/domainry-identity-sdk/authorization/principal"
 	identitymiddleware "github.com/domainry/domainry-identity-sdk/httpmiddleware"
@@ -124,7 +125,7 @@ func Open(ctx context.Context, settings config.Config) (*Service, error) {
 	mux.HandleFunc("GET /live", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
 		if err := application.Ready(r.Context()); err != nil {
-			http.Error(w, "not ready", http.StatusServiceUnavailable)
+			httpresponse.WriteError(w, r, httpresponse.Failure{Status: http.StatusServiceUnavailable, Code: "im.not_ready", Cause: err})
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
