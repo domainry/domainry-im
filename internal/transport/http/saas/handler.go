@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"mime"
 	"net/http"
 	"sort"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-foundation/modulehttp"
+	"github.com/domainry/domainry-foundation/telemetry"
 	imapplication "github.com/domainry/domainry-im/internal/application/im"
 	"github.com/domainry/domainry-im/internal/domain/conversation/model"
 )
@@ -242,7 +242,7 @@ func writeAttachment(w http.ResponseWriter, attachment model.Attachment, content
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(w, content); err != nil {
-		slog.Warn("stream IM attachment", "attachment_id", attachment.ID, "error", err)
+		telemetry.RecordHTTPError(w, "internal", "im.attachment_stream_failed")
 	}
 }
 
@@ -399,7 +399,7 @@ func writeResult(w http.ResponseWriter, r *http.Request, status int, value any, 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(value); err != nil {
-		slog.Warn("encode IM response", "path", r.URL.Path, "error", err)
+		telemetry.RecordHTTPError(w, "internal", "im.response_encode_failed")
 	}
 }
 
@@ -423,10 +423,18 @@ func writeError(w http.ResponseWriter, r *http.Request, err error) {
 			status = http.StatusServiceUnavailable
 		}
 	}
-	if status >= 500 {
-		slog.Error("IM request failed", "method", r.Method, "path", r.URL.Path, "code", code, "error", err)
-	}
+	telemetry.RecordHTTPError(w, applicationErrorKind(applicationError, status), code)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{"error": map[string]string{"code": code}})
+}
+
+func applicationErrorKind(applicationError *model.Error, status int) string {
+	if applicationError != nil && strings.TrimSpace(applicationError.Class) != "" {
+		return applicationError.Class
+	}
+	if status >= http.StatusInternalServerError {
+		return "internal"
+	}
+	return "bad_request"
 }
