@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-im/internal/domain/conversation/model"
 )
 
@@ -17,11 +18,15 @@ func (capture *classificationCapture) RecordError(kind, code string) {
 }
 
 func TestIMErrorClassificationMatrix(t *testing.T) {
-	tests := []struct{ class, code, kind string }{
-		{"unavailable", "im.database_unavailable", "unavailable"},
-		{"conflict", "im.revision_fence_rejected", "conflict"},
-		{"bad_request", "im.message_invalid", "bad_request"},
-		{"forbidden", "im.permission_denied", "forbidden"},
+	tests := []struct {
+		class apperror.ErrorKind
+		code  string
+		kind  string
+	}{
+		{apperror.KindUnavailable, "im.database_unavailable", "unavailable"},
+		{apperror.KindConflict, "im.revision_fence_rejected", "conflict"},
+		{apperror.KindBadRequest, "im.message_invalid", "bad_request"},
+		{apperror.KindForbidden, "im.permission_denied", "forbidden"},
 	}
 	for _, test := range tests {
 		capture := &classificationCapture{ResponseRecorder: httptest.NewRecorder()}

@@ -3,6 +3,8 @@ package model
 import (
 	"errors"
 	"strings"
+
+	"github.com/domainry/domainry-foundation/apperror"
 )
 
 var (
@@ -16,7 +18,7 @@ var (
 // Error is a transport-independent application error. HTTP mapping belongs to
 // the transport package, so the domain does not import net/http.
 type Error struct {
-	Class string
+	Class apperror.ErrorKind
 	Code  string
 	Cause error
 }
@@ -39,7 +41,7 @@ func (e *Error) ApplicationErrorKind() string {
 	if e == nil {
 		return ""
 	}
-	return strings.ToLower(strings.TrimSpace(e.Class))
+	return string(apperror.NormalizeKind(string(e.Class)))
 }
 
 func (e *Error) ErrorCode() string {

@@ -89,7 +89,7 @@ func (projectionStub) ListUserRoleAssignments(context.Context, identity.UserRole
 func errorClass(err error) string {
 	var value *model.Error
 	if errors.As(err, &value) {
-		return value.Class
+		return string(value.Class)
 	}
 	return ""
 }

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/apperror"
 	"github.com/domainry/domainry-foundation/httpresponse"
 	"github.com/domainry/domainry-foundation/modulehttp"
 	"github.com/domainry/domainry-foundation/telemetry"
@@ -401,24 +402,29 @@ func writeResult(w http.ResponseWriter, r *http.Request, status int, value any, 
 }
 
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
-	status, code := http.StatusInternalServerError, "im.internal_error"
+	status, code := imHTTPStatus(apperror.KindOf(err)), "im.internal_error"
 	var applicationError *model.Error
 	if errors.As(err, &applicationError) {
 		code = applicationError.Code
-		switch applicationError.Class {
-		case "bad_request":
-			status = http.StatusBadRequest
-		case "unauthorized":
-			status = http.StatusUnauthorized
-		case "forbidden":
-			status = http.StatusForbidden
-		case "not_found":
-			status = http.StatusNotFound
-		case "conflict":
-			status = http.StatusConflict
-		case "unavailable":
-			status = http.StatusServiceUnavailable
-		}
 	}
 	httpresponse.WriteError(w, r, httpresponse.Failure{Status: status, Code: code, Cause: err})
+}
+
+func imHTTPStatus(kind apperror.ErrorKind) int {
+	switch kind {
+	case apperror.KindBadRequest:
+		return http.StatusBadRequest
+	case apperror.KindForbidden:
+		return http.StatusForbidden
+	case apperror.KindNotFound:
+		return http.StatusNotFound
+	case apperror.KindConflict:
+		return http.StatusConflict
+	case apperror.KindRateLimited:
+		return http.StatusTooManyRequests
+	case apperror.KindUnavailable:
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusInternalServerError
+	}
 }
