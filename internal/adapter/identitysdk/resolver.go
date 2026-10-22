@@ -34,7 +34,7 @@ func (r *Resolver) Resolve(ctx context.Context, actionKey string) (model.Actor, 
 	if workspaceID != r.workspaceID || !identity.SubjectID(subjectID).Valid() {
 		return model.Actor{}, &model.Error{Class: "forbidden", Code: "im.workspace_scope_mismatch"}
 	}
-	if principal.User.ID != "" && strings.TrimSpace(principal.User.ID) != subjectID {
+	if principal.User.UserID != "" && strings.TrimSpace(principal.User.UserID) != subjectID {
 		return model.Actor{}, &model.Error{Class: "unavailable", Code: "im.identity_projection_mismatch"}
 	}
 	if principal.User.Status != "" && principal.User.Status != identity.UserStatusActive {

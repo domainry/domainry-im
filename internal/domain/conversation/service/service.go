@@ -3,9 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"math"
@@ -16,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domainry/domainry-foundation/entityid"
 	"github.com/domainry/domainry-im/internal/domain/conversation/model"
 )
 
@@ -121,9 +119,13 @@ func (s *Service) CreateThread(ctx context.Context, actor model.Actor, request m
 	if err := s.directory.ValidateMembers(ctx, members); err != nil {
 		return model.Thread{}, err
 	}
+	threadID, err := deterministicThreadID(actor.WorkspaceID, request.Kind, request.ClientThreadID, contextRef, members)
+	if err != nil {
+		return model.Thread{}, err
+	}
 	now := s.now()
 	thread := model.Thread{
-		ID:   deterministicThreadID(actor.WorkspaceID, request.Kind, request.ClientThreadID, contextRef, members),
+		ID:   threadID,
 		Kind: request.Kind, ClientThreadID: request.ClientThreadID, Context: contextRef,
 		Title: request.Title, MemberIDs: members, CreatedAt: now, UpdatedAt: now,
 	}
@@ -228,7 +230,7 @@ func (s *Service) SendMessage(ctx context.Context, actor model.Actor, threadID s
 		}
 		attachments = append(attachments, attachment)
 	}
-	messageID, err := newID("msg")
+	messageID, err := newID("immsg")
 	if err != nil {
 		return model.Message{}, err
 	}
@@ -552,7 +554,7 @@ func normalizeAttachment(value model.CreateAttachmentRequest) (model.Attachment,
 	default:
 		return model.Attachment{}, model.Invalid("im.attachment_location_status_invalid")
 	}
-	attachmentID, err := newID("att")
+	attachmentID, err := newID("imatt")
 	if err != nil {
 		return model.Attachment{}, err
 	}
@@ -567,7 +569,7 @@ func compactJSON(value json.RawMessage) (json.RawMessage, error) {
 	return json.RawMessage(append([]byte(nil), output.Bytes()...)), nil
 }
 
-func deterministicThreadID(workspaceID string, kind model.ThreadKind, clientThreadID string, contextRef *model.ContextRef, members []string) string {
+func deterministicThreadID(workspaceID string, kind model.ThreadKind, clientThreadID string, contextRef *model.ContextRef, members []string) (string, error) {
 	identity := strings.Join(members, "\x00")
 	if kind == model.ThreadGroup {
 		identity = "client\x00" + clientThreadID
@@ -575,14 +577,17 @@ func deterministicThreadID(workspaceID string, kind model.ThreadKind, clientThre
 			identity = "context\x00" + contextRef.Namespace + "\x00" + contextRef.ResourceType + "\x00" + contextRef.ResourceID
 		}
 	}
-	digest := sha256.Sum256([]byte(workspaceID + "\x00" + string(kind) + "\x00" + identity))
-	return "thr_" + hex.EncodeToString(digest[:20])
+	value, err := entityid.Derive("imthr", "im.thread", workspaceID, string(kind), identity)
+	if err != nil {
+		return "", &model.Error{Class: "unavailable", Code: "im.identifier_unavailable", Cause: err}
+	}
+	return value, nil
 }
 
 func newID(prefix string) (string, error) {
-	var value [16]byte
-	if _, err := rand.Read(value[:]); err != nil {
+	value, err := entityid.New(prefix)
+	if err != nil {
 		return "", &model.Error{Class: "unavailable", Code: "im.identifier_unavailable", Cause: err}
 	}
-	return prefix + "_" + hex.EncodeToString(value[:]), nil
+	return value, nil
 }

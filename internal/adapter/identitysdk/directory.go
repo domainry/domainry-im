@@ -33,7 +33,7 @@ func (d *Directory) ValidateMembers(ctx context.Context, subjectIDs []string) er
 		if err != nil {
 			return &model.Error{Class: "unavailable", Code: "im.member_directory_unavailable", Cause: err}
 		}
-		if !found || strings.TrimSpace(user.ID) != subjectID || user.Status != identity.UserStatusActive {
+		if !found || strings.TrimSpace(user.UserID) != subjectID || user.Status != identity.UserStatusActive {
 			return model.Invalid("im.member_invalid")
 		}
 	}

@@ -28,9 +28,9 @@ func (r *Registrar) Prepare(ctx context.Context) error {
 	if r == nil || r.DB == nil || r.Renderer == nil {
 		return fmt.Errorf("IM migration host is incomplete")
 	}
-	statement, args, err := schema.NewTable(r.Renderer, "_schema_migrations").IfNotExists().Columns(
+	statement, args, err := schema.NewTableWithRequiredColumns(r.Renderer, "_schema_migrations", schema.Column("id", schema.BigInt()).NotNull().AutoIncrement()).IfNotExists().Columns(
 		schema.Column("owner", schema.TextKey(191)).NotNull(), schema.Column("version", schema.BigInt()).NotNull(), schema.Column("name", schema.TextKey(191)).NotNull(), schema.Column("checksum", schema.TextKey(64)).NotNull(), schema.Column("dirty", schema.Boolean()).NotNull(), schema.Column("applied_at", schema.BigInt()).NotNull(),
-	).PrimaryKey("owner", "version").Build()
+	).PrimaryKey("id").Unique("owner", "version").Build()
 	if err != nil {
 		return err
 	}

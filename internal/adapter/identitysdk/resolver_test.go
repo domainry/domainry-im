@@ -23,10 +23,16 @@ func TestResolverRequiresExactPermissionAndCanonicalAllScope(t *testing.T) {
 		FunctionGrants:        []identity.FunctionGrant{{Resource: "im.threads", Action: "list", Effect: identity.EffectAllow}},
 		DataPolicies:          []identity.DataPolicy{{Key: "im.threads.list", Resource: "im.threads", Action: "list", Effect: identity.EffectAllow, DataScopes: []identity.DataScope{identity.DataScopeAll}}},
 	}
-	ctx := identity.WithRequestIdentity(context.Background(), identity.RequestIdentity{Principal: identity.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a", User: identity.User{ID: "user-a", Name: "User A", Status: identity.UserStatusActive}, AccessBundle: &bundle}})
+	principal := identity.Principal{Known: true, WorkspaceID: "workspace-a", UserID: "user-a", User: identity.User{ID: 9876, UserID: "user-a", Name: "User A", Status: identity.UserStatusActive}, AccessBundle: &bundle}
+	ctx := identity.WithRequestIdentity(context.Background(), identity.RequestIdentity{Principal: principal})
 	actor, err := resolver.Resolve(ctx, "im.threads.list")
 	if err != nil || actor.SubjectID != "user-a" || actor.DisplayName != "User A" {
 		t.Fatalf("actor=%#v err=%v", actor, err)
+	}
+	principal.User.UserID = "another-user"
+	mismatched := identity.WithRequestIdentity(context.Background(), identity.RequestIdentity{Principal: principal})
+	if _, err := resolver.Resolve(mismatched, "im.threads.list"); errorClass(err) != "unavailable" {
+		t.Fatalf("business identity mismatch was not rejected: %v", err)
 	}
 	if _, err := resolver.Resolve(ctx, "im.threads.create"); errorClass(err) != "forbidden" {
 		t.Fatalf("missing permission error=%v", err)
@@ -54,13 +60,14 @@ func TestPermissionDefinitionsAreExactActionProjection(t *testing.T) {
 
 func TestDirectoryRejectsUnknownAndInactiveMembers(t *testing.T) {
 	directory := &Directory{projection: projectionStub{users: map[string]identity.User{
-		"active":   {ID: "active", Status: identity.UserStatusActive},
-		"inactive": {ID: "inactive", Status: "disabled"},
+		"active":     {ID: 1, UserID: "active", Status: identity.UserStatusActive},
+		"inactive":   {ID: 2, UserID: "inactive", Status: "disabled"},
+		"mismatched": {ID: 3, UserID: "active", Status: identity.UserStatusActive},
 	}}}
 	if err := directory.ValidateMembers(context.Background(), []string{"active"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, subjectID := range []string{"missing", "inactive"} {
+	for _, subjectID := range []string{"missing", "inactive", "mismatched"} {
 		if err := directory.ValidateMembers(context.Background(), []string{subjectID}); errorClass(err) != "bad_request" {
 			t.Fatalf("subject=%s err=%v", subjectID, err)
 		}
