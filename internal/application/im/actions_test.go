@@ -38,7 +38,7 @@ func TestAuthorizationActionsOwnEveryHTTPRoute(t *testing.T) {
 		"PUT /im/threads/{thread_id}/members",
 		"GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history",
 		"GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history/search",
-		"GET /im/context-attachments/{attachment_id}/content",
+		"GET /im/contexts/{namespace}/{resource_type}/{resource_id}/attachments/{attachment_id}/content",
 		"GET /im/quick-replies",
 		"PUT /im/quick-replies/{key}",
 	} {

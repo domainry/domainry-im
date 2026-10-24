@@ -51,7 +51,7 @@ func AuthorizationActions() ([]actioncontract.ActionDefinition, error) {
 		{ActionAttachmentsRead, "GET /im/attachments/{attachment_id}/content", "Read IM attachment", read, low, "not_applicable"},
 		{ActionContextHistoryList, "GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history", "Read IM context history", read, medium, "not_applicable"},
 		{ActionContextHistorySearch, "GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history/search", "Search IM context history", read, medium, "not_applicable"},
-		{ActionContextAttachmentsRead, "GET /im/context-attachments/{attachment_id}/content", "Read IM context attachment", read, medium, "not_applicable"},
+		{ActionContextAttachmentsRead, "GET /im/contexts/{namespace}/{resource_type}/{resource_id}/attachments/{attachment_id}/content", "Read IM context attachment", read, medium, "not_applicable"},
 		{ActionQuickRepliesList, "GET /im/quick-replies", "List IM quick replies", read, low, "not_applicable"},
 		{ActionQuickRepliesUpdate, "PUT /im/quick-replies/{key}", "Update IM quick reply", write, medium, "natural_key"},
 		{ActionEventsStream, "GET /im/events", "Open IM synchronization stream", read, low, "not_applicable"},

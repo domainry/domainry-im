@@ -105,7 +105,7 @@ func (s *Store) SearchContextHistory(ctx context.Context, actor model.Actor, con
 	return scanJSON[model.Message](rows)
 }
 
-func (s *Store) GetContextAttachment(ctx context.Context, actor model.Actor, attachmentID string) (model.Attachment, error) {
+func (s *Store) GetContextAttachment(ctx context.Context, actor model.Actor, contextRef model.ContextRef, attachmentID string) (model.Attachment, error) {
 	statement, args, err := query.NewSelectBuilder(s.dialect, attachmentsTable).Columns("message_id", "payload_json").Where(query.And(query.Equal("workspace_id", actor.WorkspaceID), query.Equal("attachment_id", attachmentID))).Build()
 	if err != nil {
 		return model.Attachment{}, err
@@ -124,7 +124,7 @@ func (s *Store) GetContextAttachment(ctx context.Context, actor model.Actor, att
 		return model.Attachment{}, err
 	}
 	thread, err := s.loadThreadRecord(ctx, s.database, actor.WorkspaceID, message.ThreadID)
-	if err != nil || thread.Context == nil {
+	if err != nil || thread.Context == nil || *thread.Context != contextRef {
 		return model.Attachment{}, model.ErrAttachmentNotFound
 	}
 	var out model.Attachment

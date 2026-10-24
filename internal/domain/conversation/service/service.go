@@ -46,7 +46,7 @@ type Repository interface {
 	GetAttachment(context.Context, model.Actor, string) (model.Attachment, error)
 	ContextHistory(context.Context, model.Actor, model.ContextRef, int64, int) (model.ContextHistory, error)
 	SearchContextHistory(context.Context, model.Actor, model.ContextRef, model.SearchMessagesRequest) ([]model.Message, error)
-	GetContextAttachment(context.Context, model.Actor, string) (model.Attachment, error)
+	GetContextAttachment(context.Context, model.Actor, model.ContextRef, string) (model.Attachment, error)
 	ListQuickReplies(context.Context, model.Actor, string) ([]model.QuickReply, error)
 	GetQuickReply(context.Context, model.Actor, string) (model.QuickReply, error)
 	PutQuickReply(context.Context, model.Actor, model.QuickReply) (model.QuickReply, error)
@@ -415,15 +415,19 @@ func (s *Service) OpenAttachment(ctx context.Context, actor model.Actor, attachm
 	return s.openStoredAttachment(ctx, actor, attachment)
 }
 
-func (s *Service) OpenContextAttachment(ctx context.Context, actor model.Actor, attachmentID string) (model.Attachment, io.ReadCloser, error) {
+func (s *Service) OpenContextAttachment(ctx context.Context, actor model.Actor, contextRef model.ContextRef, attachmentID string) (model.Attachment, io.ReadCloser, error) {
 	if err := validateActor(actor); err != nil {
+		return model.Attachment{}, nil, err
+	}
+	contextRef, err := normalizeContext(contextRef)
+	if err != nil {
 		return model.Attachment{}, nil, err
 	}
 	attachmentID = strings.TrimSpace(attachmentID)
 	if !stableID.MatchString(attachmentID) {
 		return model.Attachment{}, nil, model.Invalid("im.attachment_invalid")
 	}
-	attachment, err := s.repository.GetContextAttachment(ctx, actor, attachmentID)
+	attachment, err := s.repository.GetContextAttachment(ctx, actor, contextRef, attachmentID)
 	if err != nil {
 		return model.Attachment{}, nil, model.RepositoryError(err)
 	}

@@ -36,7 +36,7 @@ type Application interface {
 	OpenAttachment(context.Context, model.Actor, string) (model.Attachment, io.ReadCloser, error)
 	ContextHistory(context.Context, model.Actor, model.ContextRef, int64, int) (model.ContextHistory, error)
 	SearchContextHistory(context.Context, model.Actor, model.ContextRef, model.SearchMessagesRequest) ([]model.Message, error)
-	OpenContextAttachment(context.Context, model.Actor, string) (model.Attachment, io.ReadCloser, error)
+	OpenContextAttachment(context.Context, model.Actor, model.ContextRef, string) (model.Attachment, io.ReadCloser, error)
 	ListQuickReplies(context.Context, model.Actor, string) ([]model.QuickReply, error)
 	PutQuickReply(context.Context, model.Actor, string, model.PutQuickReplyRequest) (model.QuickReply, error)
 	SyncState(context.Context, model.Actor) (model.SyncState, error)
@@ -274,7 +274,7 @@ func (h *Handler) searchContextHistory(w http.ResponseWriter, r *http.Request, a
 }
 
 func (h *Handler) contextAttachment(w http.ResponseWriter, r *http.Request, actor model.Actor) {
-	attachment, content, err := h.application.OpenContextAttachment(r.Context(), actor, r.PathValue("attachment_id"))
+	attachment, content, err := h.application.OpenContextAttachment(r.Context(), actor, contextFromPath(r), r.PathValue("attachment_id"))
 	if err != nil {
 		writeError(w, r, err)
 		return

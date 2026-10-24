@@ -207,9 +207,13 @@ func TestGenericExtensionsRemainOpaqueToIM(t *testing.T) {
 	if searchResponse.Code != http.StatusOK || len(search.Messages) != 1 || search.Messages[0].ID != structuredMessage.ID {
 		t.Fatalf("search status=%d values=%#v", searchResponse.Code, search.Messages)
 	}
-	content := requestAs(t, handler, auditor, http.MethodGet, "/im/context-attachments/"+attachmentMessage.Attachments[0].ID+"/content", nil)
+	content := requestAs(t, handler, auditor, http.MethodGet, "/im/contexts/example-product/asset/asset-001/attachments/"+attachmentMessage.Attachments[0].ID+"/content", nil)
 	if content.Code != http.StatusOK || content.Body.Len() == 0 || !strings.Contains(content.Header().Get("Content-Disposition"), "machine-room.jpg") {
 		t.Fatalf("context attachment status=%d headers=%v", content.Code, content.Header())
+	}
+	wrongContext := requestAs(t, handler, auditor, http.MethodGet, "/im/contexts/example-product/asset/asset-other/attachments/"+attachmentMessage.Attachments[0].ID+"/content", nil)
+	if wrongContext.Code != http.StatusNotFound {
+		t.Fatalf("cross-context attachment status=%d body=%s", wrongContext.Code, wrongContext.Body.String())
 	}
 	legacy := requestJSONAs(t, handler, bob, http.MethodPut, "/im/estimate-requests/old", map[string]any{"status": "received"})
 	if legacy.Code != http.StatusNotFound {

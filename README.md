@@ -123,7 +123,7 @@ Authorization: Bearer <domainry-access-token>
 | `im.attachments.read` | `GET /im/attachments/{attachment_id}/content` | 下载成员可访问的附件 |
 | `im.contexts.history.list` | `GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history` | 按外部上下文读取历史 |
 | `im.contexts.history.search` | `GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history/search` | 按外部上下文搜索历史 |
-| `im.contexts.attachments.read` | `GET /im/context-attachments/{attachment_id}/content` | 读取上下文会话附件 |
+| `im.contexts.attachments.read` | `GET /im/contexts/{namespace}/{resource_type}/{resource_id}/attachments/{attachment_id}/content` | 校验附件所属上下文后读取 |
 | `im.quick_replies.list` | `GET /im/quick-replies?tag=` | 获取启用中的常用语 |
 | `im.quick_replies.update` | `PUT /im/quick-replies/{key}` | 新增、修改或停用常用语 |
 | `im.events.stream` | `GET /im/events` | 建立同步提示流 |
