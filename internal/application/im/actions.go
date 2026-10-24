@@ -72,7 +72,10 @@ func AuthorizationActions() ([]actioncontract.ActionDefinition, error) {
 			EffectClass: spec.effect, RiskLevel: spec.risk, IdempotencyDecision: spec.idempotency,
 			AuditClass: "im_http", LifecycleStatus: actioncontract.LifecycleActive,
 			Authorization: actioncontract.Authorization{Strategy: actioncontract.AuthorizationAuthenticated},
-			Permission:    &actioncontract.PermissionDefinition{Key: spec.key, Owner: AuthorizationOwner, ResourceKey: spec.key[:separator], OperationKey: spec.key[separator+1:], Label: spec.label, Category: "Instant messaging", LifecycleStatus: actioncontract.LifecycleActive},
+			Permission: &actioncontract.PermissionDefinition{
+				Key: spec.key, Owner: AuthorizationOwner, ResourceKey: spec.key[:separator], OperationKey: spec.key[separator+1:],
+				Label: spec.label, Category: "Instant messaging", GrantMode: actioncontract.PermissionGrantDirect, LifecycleStatus: actioncontract.LifecycleActive,
+			},
 		}
 		normalized, err := actioncontract.NormalizeDefinition(definition)
 		if err != nil {

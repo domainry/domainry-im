@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	actioncontract "github.com/domainry/domainry-foundation/action"
 	"github.com/domainry/domainry-foundation/modulehttp"
 )
 
@@ -17,7 +18,7 @@ func TestAuthorizationActionsOwnEveryHTTPRoute(t *testing.T) {
 	}
 	seen := map[string]bool{}
 	for _, definition := range definitions {
-		if definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Owner != AuthorizationOwner {
+		if definition.Permission == nil || definition.Permission.Key != definition.Key || definition.Permission.GrantMode != actioncontract.PermissionGrantDirect || definition.Owner != AuthorizationOwner {
 			t.Fatalf("invalid exact permission: %#v", definition)
 		}
 		route, err := modulehttp.RouteFromAction(definition)
