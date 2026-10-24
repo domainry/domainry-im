@@ -94,7 +94,8 @@ adapter/assembly 边界，通用会话领域不依赖 Identity SDK。
 
 数据库初始结构是 source-owned 的 v1 Schema，通过 `domainry-orm/schema` 生成并由
 唯一 `_schema_migrations` 宿主登记。运行时查询使用 `domainry-orm/query`，Repository
-没有手写 SQL。
+没有手写业务 SQL。本地开发默认使用 SQLite；生产和多实例部署使用 PostgreSQL。多个
+实例启动时以 PostgreSQL advisory lock 串行执行迁移，避免并发建表或迁移记录冲突。
 
 ## HTTP API 与权限
 
@@ -182,9 +183,16 @@ Authorization: Bearer <domainry-access-token>
 | 环境变量 | 说明 |
 |---|---|
 | `DOMAINRY_IM_LISTEN_ADDRESS` | 监听地址，默认 `:8092` |
-| `DOMAINRY_IM_DATABASE_PATH` | SQLite 文件，默认 `./data/domainry-im.db` |
+| `DOMAINRY_IM_DATABASE_DRIVER` | 数据库驱动：本地默认 `sqlite`，生产使用 `postgres` |
+| `DOMAINRY_IM_DATABASE_PATH` | SQLite 文件，仅 `sqlite` 使用，默认 `./data/domainry-im.db` |
 | `DOMAINRY_IM_SQLITE_BUSY_TIMEOUT` | SQLite 写锁等待，默认 `5s` |
 | `DOMAINRY_IM_SQLITE_MAX_OPEN_CONNECTIONS` | SQLite 连接数，默认 `8` |
+| `DOMAINRY_IM_DATABASE_DSN` | PostgreSQL DSN；`postgres` 驱动必填 |
+| `DOMAINRY_IM_DATABASE_SCHEMA` | PostgreSQL Schema，默认 `public`；建议生产使用 `domainry_im` |
+| `DOMAINRY_IM_DATABASE_MAX_OPEN_CONNECTIONS` | PostgreSQL 最大连接数，默认 `16` |
+| `DOMAINRY_IM_DATABASE_MAX_IDLE_CONNECTIONS` | PostgreSQL 最大空闲连接数，默认 `8` |
+| `DOMAINRY_IM_DATABASE_CONNECTION_LIFETIME` | PostgreSQL 连接最长生命周期，默认 `30m` |
+| `DOMAINRY_IM_DATABASE_CONNECTION_IDLE_TIME` | PostgreSQL 空闲连接最长保留时间，默认 `5m` |
 | `DOMAINRY_IM_SSE_POLL_INTERVAL` | 持久状态检查周期，默认 `2s` |
 | `DOMAINRY_IM_SSE_HEARTBEAT` | SSE 心跳周期，默认 `15s` |
 | `DOMAINRY_IM_IDENTITY_ENDPOINT` | Domainry Identity 地址，必填 |
@@ -199,6 +207,19 @@ Authorization: Bearer <domainry-access-token>
 ```bash
 go run ./cmd/im-server
 ```
+
+生产数据库示例：
+
+```bash
+DOMAINRY_IM_DATABASE_DRIVER=postgres \
+DOMAINRY_IM_DATABASE_DSN='postgres://domainry_im:password@postgres:5432/domainry?sslmode=require' \
+DOMAINRY_IM_DATABASE_SCHEMA=domainry_im \
+go run ./cmd/im-server
+```
+
+运行账号必须能连接目标数据库并对配置的 Schema 执行建表和 DML。服务启动时会创建不
+存在的 Schema 并执行自身迁移；SQLite 只面向本地开发和单实例测试，不作为生产部署
+方案。
 
 IM 数据库只保存 `file_id` 和消息侧附件元数据，文件内容、哈希和对象存储引用由独立
 Knowledge 服务管理。生产环境在 Knowledge 配置 AWS S3 或 MinIO；IM 不接触 bucket、

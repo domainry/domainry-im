@@ -2,7 +2,6 @@ package saas
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -21,9 +20,6 @@ import (
 	"github.com/domainry/domainry-im/internal/infrastructure/persistence/migrationhost"
 	httptransport "github.com/domainry/domainry-im/internal/transport/http/saas"
 	knowledgefiles "github.com/domainry/domainry-knowledge-sdk/files"
-	ormdialect "github.com/domainry/domainry-orm/dialect"
-	ormsqlite "github.com/domainry/domainry-orm/sqlite"
-	_ "modernc.org/sqlite"
 )
 
 type Service struct {
@@ -53,47 +49,32 @@ func Open(ctx context.Context, settings config.Config) (*Service, error) {
 		return nil, err
 	}
 
-	if err := ensureParent(settings.DatabasePath); err != nil {
-		return nil, err
-	}
-	connectionConfig := ormsqlite.DefaultOwnedConnectionConfig(settings.DatabasePath)
-	connectionConfig.BusyTimeout = settings.SQLiteBusyTimeout
-	connectionConfig.MaxOpenConnections = settings.SQLiteMaxOpenConnections
-	connectionConfig.MaxIdleConnections = settings.SQLiteMaxOpenConnections
-	dsn, err := connectionConfig.DSN()
+	databaseResources, err := openDatabase(ctx, settings)
 	if err != nil {
 		return nil, err
 	}
-	database, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, err
-	}
+	database := databaseResources.database
 	closeDatabase := true
 	defer func() {
 		if closeDatabase {
 			_ = database.Close()
 		}
 	}()
-	if err := ormsqlite.InitializeOwned(ctx, database, connectionConfig); err != nil {
-		return nil, err
-	}
-	dialectValue, err := ormdialect.New(ormdialect.SQLite)
-	if err != nil {
-		return nil, err
-	}
-	renderer := dialectValue.WithSchema("")
+	renderer := databaseResources.renderer
 	registrar := &migrationhost.Registrar{DB: database, Renderer: renderer}
-	if err := registrar.Prepare(ctx); err != nil {
+	if err := databaseResources.applyMigrations(ctx, func() error {
+		if err := registrar.Prepare(ctx); err != nil {
+			return err
+		}
+		migrations, err := imstore.SchemaMigrations(renderer)
+		if err != nil {
+			return err
+		}
+		return registrar.ApplyOwnedMigrations(ctx, imstore.MigrationOwner, migrations)
+	}); err != nil {
 		return nil, err
 	}
-	migrations, err := imstore.SchemaMigrations(renderer)
-	if err != nil {
-		return nil, err
-	}
-	if err := registrar.ApplyOwnedMigrations(ctx, imstore.MigrationOwner, migrations); err != nil {
-		return nil, err
-	}
-	repository, err := imstore.NewStore(database, renderer, ormsqlite.NewProfile())
+	repository, err := imstore.NewStore(database, renderer, databaseResources.profile)
 	if err != nil {
 		return nil, err
 	}

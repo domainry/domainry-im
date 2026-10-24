@@ -11,7 +11,14 @@ import (
 
 type Config struct {
 	ListenAddress               string
+	DatabaseDriver              string
 	DatabasePath                string
+	DatabaseDSN                 string
+	DatabaseSchema              string
+	DatabaseMaxOpenConnections  int
+	DatabaseMaxIdleConnections  int
+	DatabaseConnectionLifetime  time.Duration
+	DatabaseConnectionIdleTime  time.Duration
 	SQLiteBusyTimeout           time.Duration
 	SQLiteMaxOpenConnections    int
 	SSEPollInterval             time.Duration
@@ -27,6 +34,7 @@ type Config struct {
 }
 
 func FromEnvironment() (Config, error) {
+	driver := strings.ToLower(defaultValue("DOMAINRY_IM_DATABASE_DRIVER", "sqlite"))
 	busyTimeout, err := durationValue("DOMAINRY_IM_SQLITE_BUSY_TIMEOUT", 5*time.Second)
 	if err != nil {
 		return Config{}, err
@@ -43,10 +51,33 @@ func FromEnvironment() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	databaseMaxOpen, err := integerValue("DOMAINRY_IM_DATABASE_MAX_OPEN_CONNECTIONS", 16)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseMaxIdle, err := integerValue("DOMAINRY_IM_DATABASE_MAX_IDLE_CONNECTIONS", 8)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseLifetime, err := durationValue("DOMAINRY_IM_DATABASE_CONNECTION_LIFETIME", 30*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
+	databaseIdleTime, err := durationValue("DOMAINRY_IM_DATABASE_CONNECTION_IDLE_TIME", 5*time.Minute)
+	if err != nil {
+		return Config{}, err
+	}
 	applicationKey := defaultValue("DOMAINRY_IM_APPLICATION_KEY", "domainry-im")
 	settings := Config{
 		ListenAddress:               defaultValue("DOMAINRY_IM_LISTEN_ADDRESS", ":8092"),
+		DatabaseDriver:              driver,
 		DatabasePath:                defaultValue("DOMAINRY_IM_DATABASE_PATH", "./data/domainry-im.db"),
+		DatabaseDSN:                 strings.TrimSpace(os.Getenv("DOMAINRY_IM_DATABASE_DSN")),
+		DatabaseSchema:              defaultValue("DOMAINRY_IM_DATABASE_SCHEMA", "public"),
+		DatabaseMaxOpenConnections:  databaseMaxOpen,
+		DatabaseMaxIdleConnections:  databaseMaxIdle,
+		DatabaseConnectionLifetime:  databaseLifetime,
+		DatabaseConnectionIdleTime:  databaseIdleTime,
 		SQLiteBusyTimeout:           busyTimeout,
 		SQLiteMaxOpenConnections:    maxOpen,
 		SSEPollInterval:             poll,
@@ -66,8 +97,17 @@ func FromEnvironment() (Config, error) {
 	if settings.KnowledgeEndpoint == "" || settings.KnowledgeRuntimeID == "" || settings.KnowledgeServiceAccessToken == "" {
 		return Config{}, errors.New("Domainry Knowledge endpoint, Runtime ID, and service token are required")
 	}
-	if settings.DatabasePath == "" || settings.SQLiteBusyTimeout <= 0 || settings.SQLiteMaxOpenConnections < 1 {
+	if settings.DatabaseDriver != "sqlite" && settings.DatabaseDriver != "postgres" {
+		return Config{}, errors.New("DOMAINRY_IM_DATABASE_DRIVER must be sqlite or postgres")
+	}
+	if settings.DatabaseDriver == "sqlite" && (settings.DatabasePath == "" || settings.SQLiteBusyTimeout <= 0 || settings.SQLiteMaxOpenConnections < 1) {
 		return Config{}, errors.New("valid SQLite settings are required")
+	}
+	if settings.DatabaseDriver == "postgres" && settings.DatabaseDSN == "" {
+		return Config{}, errors.New("DOMAINRY_IM_DATABASE_DSN is required for PostgreSQL")
+	}
+	if settings.DatabaseSchema == "" || settings.DatabaseMaxOpenConnections < 1 || settings.DatabaseMaxIdleConnections < 0 || settings.DatabaseMaxIdleConnections > settings.DatabaseMaxOpenConnections || settings.DatabaseConnectionLifetime <= 0 || settings.DatabaseConnectionIdleTime <= 0 {
+		return Config{}, errors.New("valid database pool settings are required")
 	}
 	if settings.SSEPollInterval < 250*time.Millisecond || settings.SSEPollInterval > time.Minute || settings.SSEHeartbeat < 5*time.Second || settings.SSEHeartbeat > time.Minute {
 		return Config{}, errors.New("valid SSE settings are required")
