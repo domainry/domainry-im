@@ -68,6 +68,7 @@ type bindingTestStub struct {
 	descriptor   identity.Descriptor
 	applications *applicationRegistryTestStub
 	permissions  *permissionRegistryTestStub
+	verifier     identity.ApplicationServiceTokenVerifier
 	closed       bool
 }
 
@@ -81,6 +82,12 @@ func (s *bindingTestStub) Applications() identity.ApplicationRegistry { return s
 func (s *bindingTestStub) Permissions() identity.PermissionRegistry   { return s.permissions }
 func (*bindingTestStub) Credentials() identity.CredentialManager      { return nil }
 func (*bindingTestStub) ApplicationServices() identity.ApplicationServiceAuthentication {
+	return applicationServiceTestStub{}
+}
+func (s *bindingTestStub) ApplicationServiceVerifier() identity.ApplicationServiceTokenVerifier {
+	if s.verifier != nil {
+		return s.verifier
+	}
 	return applicationServiceTestStub{}
 }
 func (s *bindingTestStub) Close(context.Context) error { s.closed = true; return nil }

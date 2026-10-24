@@ -118,65 +118,105 @@ func (s *Store) AppendMessage(ctx context.Context, actor model.Actor, threadID s
 		if err := s.requireMembership(ctx, tx, actor, threadID); err != nil {
 			return err
 		}
-		statement, args, err := query.NewSelectBuilder(s.dialect, messagesTable).Columns("message_id").Where(query.And(query.Equal("workspace_id", actor.WorkspaceID), query.Equal("thread_id", threadID), query.Equal("sender_subject_id", actor.SubjectID), query.Equal("client_message_id", message.ClientMessageID))).Build()
+		var err error
+		out, created, err = s.appendMessage(ctx, tx, actor, threadID, message)
+		return err
+	})
+	return out, created, err
+}
+
+func (s *Store) AppendContextMessage(ctx context.Context, actor model.Actor, thread model.Thread, message model.Message) (model.Message, bool, error) {
+	var out model.Message
+	created := false
+	err := s.write(ctx, func(tx sqlhost.DBTX) error {
+		found, err := s.threadExists(ctx, tx, actor.WorkspaceID, thread.ID)
 		if err != nil {
 			return err
 		}
-		var existingID string
-		err = tx.QueryRowContext(ctx, statement, args...).Scan(&existingID)
-		if err == nil {
-			out, err = s.loadMessage(ctx, tx, actor.WorkspaceID, existingID)
-			if err == nil && !sameClientMessage(out, message) {
-				return model.ErrConflict
-			}
-			return err
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		update, updateArgs, err := query.NewUpdateBuilder(s.dialect, threadsTable).SetExpression("last_message_seq", query.Add(query.Column("last_message_seq"), query.Value(int64(1)))).Set("updated_at_ms", millis(message.CreatedAt)).Where(query.And(query.Equal("workspace_id", actor.WorkspaceID), query.Equal("thread_id", threadID))).Build()
-		if err := exec(ctx, tx, update, updateArgs, err); err != nil {
-			return err
-		}
-		selectSequence, sequenceArgs, err := query.NewSelectBuilder(s.dialect, threadsTable).Columns("last_message_seq").Where(query.And(query.Equal("workspace_id", actor.WorkspaceID), query.Equal("thread_id", threadID))).Build()
-		if err != nil {
-			return err
-		}
-		if err := tx.QueryRowContext(ctx, selectSequence, sequenceArgs...).Scan(&message.Sequence); err != nil {
-			return err
-		}
-		message.ThreadID = threadID
-		if message.Attachments == nil {
-			message.Attachments = []model.Attachment{}
-		}
-		messagePayload, err := encode(message)
-		if err != nil {
-			return err
-		}
-		insert, insertArgs, err := query.NewInsertBuilder(s.dialect, messagesTable).Columns("message_id", "workspace_id", "thread_id", "sequence", "client_message_id", "sender_subject_id", "content_type", "body_text", "created_at_ms", "payload_json").Values(message.ID, actor.WorkspaceID, threadID, message.Sequence, message.ClientMessageID, actor.SubjectID, message.ContentType, message.Text, millis(message.CreatedAt), messagePayload).Build()
-		if err := exec(ctx, tx, insert, insertArgs, err); err != nil {
-			return err
-		}
-		for _, tag := range message.Tags {
-			insert, insertArgs, err = query.NewInsertBuilder(s.dialect, messageTagsTable).Columns("message_id", "workspace_id", "tag", "created_at_ms").Values(message.ID, actor.WorkspaceID, tag, millis(message.CreatedAt)).Build()
-			if err := exec(ctx, tx, insert, insertArgs, err); err != nil {
-				return err
-			}
-		}
-		for _, attachment := range message.Attachments {
-			attachmentPayload, err := encode(attachment)
+		if !found {
+			payload, err := encode(thread)
 			if err != nil {
 				return err
 			}
-			insert, insertArgs, err = query.NewInsertBuilder(s.dialect, attachmentsTable).Columns("attachment_id", "workspace_id", "message_id", "file_id", "payload_json").Values(attachment.ID, actor.WorkspaceID, message.ID, attachment.FileID, attachmentPayload).Build()
-			if err := exec(ctx, tx, insert, insertArgs, err); err != nil {
+			statement, args, err := query.NewInsertBuilder(s.dialect, threadsTable).Columns("thread_id", "workspace_id", "kind", "client_thread_id", "context_namespace", "context_resource_type", "context_resource_id", "title", "created_by", "last_message_seq", "receipt_revision", "created_at_ms", "updated_at_ms", "payload_json").Values(thread.ID, actor.WorkspaceID, string(thread.Kind), "", thread.Context.Namespace, thread.Context.ResourceType, thread.Context.ResourceID, thread.Title, actor.SubjectID, int64(0), int64(0), millis(thread.CreatedAt), millis(thread.UpdatedAt), payload).Build()
+			if err := exec(ctx, tx, statement, args, err); err != nil {
 				return err
 			}
+		} else {
+			existing, err := s.loadThreadRecord(ctx, tx, actor.WorkspaceID, thread.ID)
+			if err != nil {
+				return err
+			}
+			if existing.Kind != model.ThreadGroup || existing.Context == nil || *existing.Context != *thread.Context {
+				return model.ErrConflict
+			}
 		}
-		out, created = message, true
-		return nil
+		out, created, err = s.appendMessage(ctx, tx, actor, thread.ID, message)
+		return err
 	})
 	return out, created, err
+}
+
+func (s *Store) appendMessage(ctx context.Context, tx sqlhost.DBTX, actor model.Actor, threadID string, message model.Message) (model.Message, bool, error) {
+	var out model.Message
+	created := false
+	statement, args, err := query.NewSelectBuilder(s.dialect, messagesTable).Columns("message_id").Where(query.And(query.Equal("workspace_id", actor.WorkspaceID), query.Equal("thread_id", threadID), query.Equal("sender_subject_id", actor.SubjectID), query.Equal("client_message_id", message.ClientMessageID))).Build()
+	if err != nil {
+		return out, false, err
+	}
+	var existingID string
+	err = tx.QueryRowContext(ctx, statement, args...).Scan(&existingID)
+	if err == nil {
+		out, err = s.loadMessage(ctx, tx, actor.WorkspaceID, existingID)
+		if err == nil && !sameClientMessage(out, message) {
+			return out, false, model.ErrConflict
+		}
+		return out, false, err
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return out, false, err
+	}
+	update, updateArgs, err := query.NewUpdateBuilder(s.dialect, threadsTable).SetExpression("last_message_seq", query.Add(query.Column("last_message_seq"), query.Value(int64(1)))).Set("updated_at_ms", millis(message.CreatedAt)).Where(query.And(query.Equal("workspace_id", actor.WorkspaceID), query.Equal("thread_id", threadID))).Build()
+	if err := exec(ctx, tx, update, updateArgs, err); err != nil {
+		return out, false, err
+	}
+	selectSequence, sequenceArgs, err := query.NewSelectBuilder(s.dialect, threadsTable).Columns("last_message_seq").Where(query.And(query.Equal("workspace_id", actor.WorkspaceID), query.Equal("thread_id", threadID))).Build()
+	if err != nil {
+		return out, false, err
+	}
+	if err := tx.QueryRowContext(ctx, selectSequence, sequenceArgs...).Scan(&message.Sequence); err != nil {
+		return out, false, err
+	}
+	message.ThreadID = threadID
+	if message.Attachments == nil {
+		message.Attachments = []model.Attachment{}
+	}
+	messagePayload, err := encode(message)
+	if err != nil {
+		return out, false, err
+	}
+	insert, insertArgs, err := query.NewInsertBuilder(s.dialect, messagesTable).Columns("message_id", "workspace_id", "thread_id", "sequence", "client_message_id", "sender_subject_id", "content_type", "body_text", "created_at_ms", "payload_json").Values(message.ID, actor.WorkspaceID, threadID, message.Sequence, message.ClientMessageID, actor.SubjectID, message.ContentType, message.Text, millis(message.CreatedAt), messagePayload).Build()
+	if err := exec(ctx, tx, insert, insertArgs, err); err != nil {
+		return out, false, err
+	}
+	for _, tag := range message.Tags {
+		insert, insertArgs, err = query.NewInsertBuilder(s.dialect, messageTagsTable).Columns("message_id", "workspace_id", "tag", "created_at_ms").Values(message.ID, actor.WorkspaceID, tag, millis(message.CreatedAt)).Build()
+		if err := exec(ctx, tx, insert, insertArgs, err); err != nil {
+			return out, false, err
+		}
+	}
+	for _, attachment := range message.Attachments {
+		attachmentPayload, err := encode(attachment)
+		if err != nil {
+			return out, false, err
+		}
+		insert, insertArgs, err = query.NewInsertBuilder(s.dialect, attachmentsTable).Columns("attachment_id", "workspace_id", "message_id", "file_id", "payload_json").Values(attachment.ID, actor.WorkspaceID, message.ID, attachment.FileID, attachmentPayload).Build()
+		if err := exec(ctx, tx, insert, insertArgs, err); err != nil {
+			return out, false, err
+		}
+	}
+	out, created = message, true
+	return out, created, nil
 }
 
 func (s *Store) ListMessages(ctx context.Context, actor model.Actor, threadID string, afterSequence int64, limit int) (model.MessagePage, error) {

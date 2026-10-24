@@ -89,7 +89,8 @@ module                               Action、Schema、表归属声明
 Workspace 和会话成员校验。
 
 独立服务启动时向 Identity 注册 Application，并用 `module:im` 权限快照精确对账 17 个
-Permission；对账失败时拒绝启动。IM 仍集成 Domainry 账号体系，但账号集成只存在于
+终端用户 Permission；另有一个只接受 Identity 短期 application-service token 的业务投影
+Action。对账失败时拒绝启动。IM 仍集成 Domainry 账号体系，但账号集成只存在于
 adapter/assembly 边界，通用会话领域不依赖 Identity SDK。
 
 数据库初始结构是 source-owned 的 v1 Schema，通过 `domainry-orm/schema` 生成并由
@@ -99,7 +100,7 @@ adapter/assembly 边界，通用会话领域不依赖 Identity SDK。
 
 ## HTTP API 与权限
 
-所有 `/im/*` 路由都必须通过 Domainry Identity：
+所有 `/im/*` 路由都必须通过 Domainry Identity。普通用户接口使用用户 access token：
 
 ```http
 Authorization: Bearer <domainry-access-token>
@@ -124,6 +125,7 @@ Authorization: Bearer <domainry-access-token>
 | `im.contexts.history.list` | `GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history` | 按外部上下文读取历史 |
 | `im.contexts.history.search` | `GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history/search` | 按外部上下文搜索历史 |
 | `im.contexts.members.update` | `PUT /im/contexts/{namespace}/{resource_type}/{resource_id}/members` | 产品校验业务资源后同步上下文群成员 |
+| application-service grant `im.contexts.messages#send` | `POST /im/contexts/{namespace}/{resource_type}/{resource_id}/messages` | 业务服务用短期精确授权 token 投影结构化状态消息；service actor 不加入群成员 |
 | `im.contexts.attachments.read` | `GET /im/contexts/{namespace}/{resource_type}/{resource_id}/attachments/{attachment_id}/content` | 校验附件所属上下文后读取 |
 | `im.quick_replies.list` | `GET /im/quick-replies?tag=` | 获取启用中的常用语 |
 | `im.quick_replies.update` | `PUT /im/quick-replies/{key}` | 新增、修改或停用常用语 |
@@ -133,6 +135,11 @@ Authorization: Bearer <domainry-access-token>
 
 上下文历史权限用于审计、客服或管理者只读访问，并不把主体伪装成群成员。普通消息、
 附件和成员修改接口仍严格要求会话成员身份。
+
+业务投影接口只接受 `kind=structured`，并要求 token 中只有目标 audience 下的
+`im.contexts.messages#send` grant。它会按上下文确定性创建空会话并以
+`client_message_id` 幂等追加消息；service actor 不会被写成成员。业务产品之后同步真实
+成员时复用同一上下文会话，因此 IM 只保存可展示的投影，不拥有或反推业务状态机。
 
 ## 离线发送和附件元数据
 

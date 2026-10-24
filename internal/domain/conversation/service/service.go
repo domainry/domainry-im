@@ -40,6 +40,7 @@ type Repository interface {
 	ReplaceContextThreadMembers(context.Context, model.Actor, model.ContextRef, []string, time.Time) (model.Thread, error)
 	ListThreads(context.Context, model.Actor, int) ([]model.Thread, error)
 	AppendMessage(context.Context, model.Actor, string, model.Message) (model.Message, bool, error)
+	AppendContextMessage(context.Context, model.Actor, model.Thread, model.Message) (model.Message, bool, error)
 	ListMessages(context.Context, model.Actor, string, int64, int) (model.MessagePage, error)
 	SearchMessages(context.Context, model.Actor, model.SearchMessagesRequest) ([]model.Message, error)
 	ListReadCursors(context.Context, model.Actor, string) ([]model.ReadCursor, error)
@@ -192,11 +193,59 @@ func (s *Service) SendMessage(ctx context.Context, actor model.Actor, threadID s
 	if err := validateActor(actor); err != nil {
 		return model.Message{}, err
 	}
-	threadID, request.ClientMessageID = strings.TrimSpace(threadID), strings.TrimSpace(request.ClientMessageID)
+	threadID = strings.TrimSpace(threadID)
+	if !stableID.MatchString(threadID) {
+		return model.Message{}, model.Invalid("im.message_invalid")
+	}
+	message, err := s.prepareMessage(ctx, actor, threadID, request)
+	if err != nil {
+		return model.Message{}, err
+	}
+	result, _, err := s.repository.AppendMessage(ctx, actor, threadID, message)
+	if err != nil {
+		return model.Message{}, model.RepositoryError(err)
+	}
+	return s.bindMessageAttachments(ctx, actor, result)
+}
+
+// SendContextMessage is the service-to-service projection boundary. It only
+// accepts structured messages, never requires or grants thread membership, and
+// creates the deterministic empty context thread when a product projects the
+// first event before its user-member projection has run.
+func (s *Service) SendContextMessage(ctx context.Context, actor model.Actor, contextRef model.ContextRef, request model.CreateMessageRequest) (model.Message, error) {
+	if err := validateActor(actor); err != nil {
+		return model.Message{}, err
+	}
+	contextRef, err := normalizeContext(contextRef)
+	if err != nil {
+		return model.Message{}, err
+	}
+	if model.MessageKind(strings.TrimSpace(string(request.Kind))) != model.MessageStructured || len(request.Attachments) != 0 {
+		return model.Message{}, model.Invalid("im.context_projection_content_invalid")
+	}
+	threadID, err := deterministicThreadID(actor.WorkspaceID, model.ThreadGroup, "", &contextRef, nil)
+	if err != nil {
+		return model.Message{}, err
+	}
+	message, err := s.prepareMessage(ctx, actor, threadID, request)
+	if err != nil {
+		return model.Message{}, err
+	}
+	now := message.CreatedAt
+	thread := model.Thread{ID: threadID, Kind: model.ThreadGroup, Context: &contextRef, MemberIDs: []string{}, CreatedAt: now, UpdatedAt: now}
+	result, _, err := s.repository.AppendContextMessage(ctx, actor, thread, message)
+	if err != nil {
+		return model.Message{}, model.RepositoryError(err)
+	}
+	return result, nil
+}
+
+func (s *Service) prepareMessage(ctx context.Context, actor model.Actor, threadID string, request model.CreateMessageRequest) (model.Message, error) {
+	request.ClientMessageID = strings.TrimSpace(request.ClientMessageID)
 	request.Text, request.TemplateKey = strings.TrimSpace(request.Text), strings.TrimSpace(request.TemplateKey)
 	request.ContentType = strings.TrimSpace(request.ContentType)
 	request.Kind = model.MessageKind(strings.TrimSpace(string(request.Kind)))
-	if !stableID.MatchString(threadID) || !stableClientID.MatchString(request.ClientMessageID) || len([]byte(request.Text)) > maxMessageBytes {
+	if !stableClientID.MatchString(request.ClientMessageID) || len([]byte(request.Text)) > maxMessageBytes {
 		return model.Message{}, model.Invalid("im.message_invalid")
 	}
 	tags, err := normalizeTags(request.Tags)
@@ -264,12 +313,12 @@ func (s *Service) SendMessage(ctx context.Context, actor model.Actor, threadID s
 		Text: request.Text, TemplateKey: request.TemplateKey, ContentType: request.ContentType,
 		Data: data, Tags: tags, Attachments: attachments, CreatedAt: s.now(),
 	}
-	result, _, err := s.repository.AppendMessage(ctx, actor, threadID, message)
-	if err != nil {
-		return model.Message{}, model.RepositoryError(err)
-	}
+	return message, nil
+}
+
+func (s *Service) bindMessageAttachments(ctx context.Context, actor model.Actor, result model.Message) (model.Message, error) {
 	for _, attachment := range result.Attachments {
-		if err = s.attachments.Bind(ctx, actor, attachment.FileID, result.ID, attachment.ID); err != nil {
+		if err := s.attachments.Bind(ctx, actor, attachment.FileID, result.ID, attachment.ID); err != nil {
 			return model.Message{}, &model.Error{Class: "unavailable", Code: "im.attachment_binding_failed", Cause: err}
 		}
 	}

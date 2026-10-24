@@ -3,6 +3,8 @@ package identitysdk
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -41,6 +43,56 @@ func TestResolverRequiresExactPermissionAndCanonicalAllScope(t *testing.T) {
 	if _, err := resolver.Resolve(ctx, "im.threads.list"); errorClass(err) != "forbidden" {
 		t.Fatalf("restricted scope error=%v", err)
 	}
+}
+
+func TestApplicationServiceAuthenticatorPublishesOnlyExactProjectionActor(t *testing.T) {
+	verifier := &applicationServiceVerifierStub{principal: identity.ApplicationServicePrincipal{
+		SubjectID:   "service:facility-ops",
+		Application: identity.ApplicationRef{WorkspaceID: "workspace-a", ApplicationKey: "facility-ops"},
+		Audience:    "facility-ops",
+	}}
+	binding := &bindingTestStub{verifier: verifier}
+	authenticator, err := NewApplicationServiceAuthenticator(binding, "workspace-a", "facility-ops")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := NewResolver("workspace-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	handler := authenticator.Authenticate(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		actor, err := resolver.Resolve(r.Context(), "im.contexts.messages.send")
+		if err != nil || actor.SubjectID != "service:facility-ops" || actor.DisplayName != "facility-ops" {
+			t.Fatalf("actor=%#v err=%v", actor, err)
+		}
+		if _, err := resolver.Resolve(r.Context(), "im.messages.send"); errorClass(err) != "forbidden" {
+			t.Fatalf("service credential escaped its exact action: %v", err)
+		}
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/im/contexts/facility_ops/site/site-1/messages", nil)
+	request.Header.Set("Authorization", "Bearer short-lived-token")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent || !called {
+		t.Fatalf("status=%d body=%s called=%v", response.Code, response.Body.String(), called)
+	}
+	if verifier.request.AccessToken != "short-lived-token" || verifier.request.Audience != "facility-ops" || verifier.request.Grant.Resource != "im.contexts.messages" || verifier.request.Grant.Action != "send" {
+		t.Fatalf("verification request=%#v", verifier.request)
+	}
+}
+
+type applicationServiceVerifierStub struct {
+	principal identity.ApplicationServicePrincipal
+	request   identity.VerifyApplicationServiceTokenRequest
+	err       error
+}
+
+func (s *applicationServiceVerifierStub) Verify(_ context.Context, request identity.VerifyApplicationServiceTokenRequest) (identity.ApplicationServicePrincipal, error) {
+	s.request = request
+	return s.principal, s.err
 }
 
 func TestPermissionDefinitionsAreExactActionProjection(t *testing.T) {

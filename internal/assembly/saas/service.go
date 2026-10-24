@@ -111,6 +111,13 @@ func Open(ctx context.Context, settings config.Config) (*Service, error) {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	serviceAuth, err := identityadapter.NewApplicationServiceAuthenticator(identityBinding, settings.IdentityWorkspaceID, settings.IdentityApplicationKey)
+	if err != nil {
+		return nil, err
+	}
+	// This exact signed route is more specific than /im/ and therefore cannot
+	// fall through to the end-user bearer-token middleware.
+	mux.Handle("POST /im/contexts/{namespace}/{resource_type}/{resource_id}/messages", serviceAuth.Authenticate(api))
 	mux.Handle("/im/", security.Authenticate(security.RequirePasswordChanged(api)))
 	closeDatabase, closeIdentity = false, false
 	return &Service{handler: mux, app: application, identity: identityBinding}, nil

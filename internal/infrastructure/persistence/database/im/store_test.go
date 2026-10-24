@@ -170,6 +170,44 @@ func TestOpaqueContextHistoryMembershipAndQuickReplies(t *testing.T) {
 	}
 }
 
+func TestContextProjectionCreatesDeterministicThreadWithoutGrantingServiceMembership(t *testing.T) {
+	store := openStore(t)
+	ctx := context.Background()
+	projector := model.Actor{WorkspaceID: "workspace-a", SubjectID: "service:facility-ops", DisplayName: "Facility Ops"}
+	worker := model.Actor{WorkspaceID: "workspace-a", SubjectID: "worker-1", DisplayName: "Worker"}
+	manager := model.Actor{WorkspaceID: "workspace-a", SubjectID: "manager-1", DisplayName: "Manager"}
+	now := time.Date(2026, 10, 25, 8, 30, 0, 0, time.UTC)
+	contextRef := model.ContextRef{Namespace: "facility_ops", ResourceType: "site", ResourceID: "site-1"}
+	thread := model.Thread{ID: "imthr_context_projection", Kind: model.ThreadGroup, Context: &contextRef, MemberIDs: []string{}, CreatedAt: now, UpdatedAt: now}
+	message := model.Message{ID: "immsg_estimate_requested", ClientMessageID: "estimate-1.requested", SenderID: projector.SubjectID, SenderName: projector.DisplayName, Kind: model.MessageStructured, ContentType: "facility_ops.estimate_request.v1", Data: json.RawMessage(`{"estimate_request_id":"estimate-1","status":"requested"}`), Tags: []string{"estimate_request", "requested"}, CreatedAt: now}
+
+	created, inserted, err := store.AppendContextMessage(ctx, projector, thread, message)
+	if err != nil || !inserted || created.Sequence != 1 || created.ThreadID != thread.ID {
+		t.Fatalf("projection=%#v inserted=%v err=%v", created, inserted, err)
+	}
+	replay := message
+	replay.ID = "immsg_retry"
+	replayed, inserted, err := store.AppendContextMessage(ctx, projector, thread, replay)
+	if err != nil || inserted || replayed.ID != message.ID {
+		t.Fatalf("replay=%#v inserted=%v err=%v", replayed, inserted, err)
+	}
+	if _, err := store.ListMessages(ctx, projector, thread.ID, 0, 10); !errors.Is(err, model.ErrNotMember) {
+		t.Fatalf("service projector unexpectedly became a chat member: %v", err)
+	}
+	updated, err := store.ReplaceContextThreadMembers(ctx, manager, contextRef, []string{worker.SubjectID}, now.Add(time.Second))
+	if err != nil || fmt.Sprint(updated.MemberIDs) != "[worker-1]" {
+		t.Fatalf("member projection=%#v err=%v", updated, err)
+	}
+	page, err := store.ListMessages(ctx, worker, thread.ID, 0, 10)
+	if err != nil || len(page.Messages) != 1 || page.Messages[0].ID != message.ID {
+		t.Fatalf("worker page=%#v err=%v", page, err)
+	}
+	history, err := store.ContextHistory(ctx, manager, contextRef, 0, 10)
+	if err != nil || len(history.Messages.Messages) != 1 || history.Messages.Messages[0].ContentType != message.ContentType {
+		t.Fatalf("history=%#v err=%v", history, err)
+	}
+}
+
 func TestCreateReplayCannotMutateExistingThread(t *testing.T) {
 	store := openStore(t)
 	ctx := context.Background()

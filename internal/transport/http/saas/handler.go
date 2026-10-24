@@ -29,6 +29,7 @@ type Application interface {
 	ReplaceContextThreadMembers(context.Context, model.Actor, model.ContextRef, model.ReplaceThreadMembersRequest) (model.Thread, error)
 	ListThreads(context.Context, model.Actor, int) ([]model.Thread, error)
 	SendMessage(context.Context, model.Actor, string, model.CreateMessageRequest) (model.Message, error)
+	SendContextMessage(context.Context, model.Actor, model.ContextRef, model.CreateMessageRequest) (model.Message, error)
 	ListMessages(context.Context, model.Actor, string, int64, int) (model.MessagePage, error)
 	SearchMessages(context.Context, model.Actor, model.SearchMessagesRequest) ([]model.Message, error)
 	ListReadCursors(context.Context, model.Actor, string) ([]model.ReadCursor, error)
@@ -121,6 +122,7 @@ func (h *Handler) actionHandlers() map[string]actorHandler {
 		imapplication.ActionAttachmentsRead:        h.attachment,
 		imapplication.ActionContextHistoryList:     h.contextHistory,
 		imapplication.ActionContextHistorySearch:   h.searchContextHistory,
+		imapplication.ActionContextMessagesSend:    h.sendContextMessage,
 		imapplication.ActionContextMembersUpdate:   h.replaceContextThreadMembers,
 		imapplication.ActionContextAttachmentsRead: h.contextAttachment,
 		imapplication.ActionQuickRepliesList:       h.listQuickReplies,
@@ -176,6 +178,16 @@ func (h *Handler) sendMessage(w http.ResponseWriter, r *http.Request, actor mode
 		return
 	}
 	value, err := h.application.SendMessage(r.Context(), actor, r.PathValue("thread_id"), input)
+	writeResult(w, r, http.StatusOK, value, err)
+}
+
+func (h *Handler) sendContextMessage(w http.ResponseWriter, r *http.Request, actor model.Actor) {
+	var input model.CreateMessageRequest
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	value, err := h.application.SendContextMessage(r.Context(), actor, contextFromPath(r), input)
 	writeResult(w, r, http.StatusOK, value, err)
 }
 

@@ -22,6 +22,7 @@ const (
 	ActionAttachmentsRead        = "im.attachments.read"
 	ActionContextHistoryList     = "im.contexts.history.list"
 	ActionContextHistorySearch   = "im.contexts.history.search"
+	ActionContextMessagesSend    = "im.contexts.messages.send"
 	ActionContextMembersUpdate   = "im.contexts.members.update"
 	ActionContextAttachmentsRead = "im.contexts.attachments.read"
 	ActionQuickRepliesList       = "im.quick_replies.list"
@@ -52,6 +53,7 @@ func AuthorizationActions() ([]actioncontract.ActionDefinition, error) {
 		{ActionAttachmentsRead, "GET /im/attachments/{attachment_id}/content", "Read IM attachment", read, low, "not_applicable"},
 		{ActionContextHistoryList, "GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history", "Read IM context history", read, medium, "not_applicable"},
 		{ActionContextHistorySearch, "GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history/search", "Search IM context history", read, medium, "not_applicable"},
+		{ActionContextMessagesSend, "POST /im/contexts/{namespace}/{resource_type}/{resource_id}/messages", "Project structured message into IM context", write, medium, "caller_key_required"},
 		{ActionContextMembersUpdate, "PUT /im/contexts/{namespace}/{resource_type}/{resource_id}/members", "Replace IM context members", write, medium, "natural_key"},
 		{ActionContextAttachmentsRead, "GET /im/contexts/{namespace}/{resource_type}/{resource_id}/attachments/{attachment_id}/content", "Read IM context attachment", read, medium, "not_applicable"},
 		{ActionQuickRepliesList, "GET /im/quick-replies", "List IM quick replies", read, low, "not_applicable"},
@@ -78,6 +80,10 @@ func AuthorizationActions() ([]actioncontract.ActionDefinition, error) {
 				Key: spec.key, Owner: AuthorizationOwner, ResourceKey: spec.key[:separator], OperationKey: spec.key[separator+1:],
 				Label: spec.label, Category: "Instant messaging", GrantMode: actioncontract.PermissionGrantDirect, LifecycleStatus: actioncontract.LifecycleActive,
 			},
+		}
+		if spec.key == ActionContextMessagesSend {
+			definition.Authorization = actioncontract.Authorization{Strategy: actioncontract.AuthorizationSigned, PolicyKey: "identity.application_service"}
+			definition.Permission = nil
 		}
 		normalized, err := actioncontract.NormalizeDefinition(definition)
 		if err != nil {
