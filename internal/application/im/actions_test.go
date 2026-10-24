@@ -13,8 +13,8 @@ func TestAuthorizationActionsOwnEveryHTTPRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 16 {
-		t.Fatalf("actions=%d want=16", len(definitions))
+	if len(definitions) != 17 {
+		t.Fatalf("actions=%d want=17", len(definitions))
 	}
 	seen := map[string]bool{}
 	for _, definition := range definitions {
@@ -38,6 +38,7 @@ func TestAuthorizationActionsOwnEveryHTTPRoute(t *testing.T) {
 		"PUT /im/threads/{thread_id}/members",
 		"GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history",
 		"GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history/search",
+		"PUT /im/contexts/{namespace}/{resource_type}/{resource_id}/members",
 		"GET /im/contexts/{namespace}/{resource_type}/{resource_id}/attachments/{attachment_id}/content",
 		"GET /im/quick-replies",
 		"PUT /im/quick-replies/{key}",

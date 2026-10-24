@@ -144,7 +144,7 @@ func TestOpaqueContextHistoryMembershipAndQuickReplies(t *testing.T) {
 	if err != nil || history.Thread.ID != thread.ID || len(history.Messages.Messages) != 1 {
 		t.Fatalf("history=%#v err=%v", history, err)
 	}
-	updated, err := store.ReplaceThreadMembers(ctx, alice, thread.ID, []string{"alice", "manager"}, now.Add(2*time.Second))
+	updated, err := store.ReplaceContextThreadMembers(ctx, manager, contextRef, []string{"alice", "manager"}, now.Add(2*time.Second))
 	if err != nil || fmt.Sprint(updated.MemberIDs) != "[alice manager]" {
 		t.Fatalf("updated=%#v err=%v", updated, err)
 	}

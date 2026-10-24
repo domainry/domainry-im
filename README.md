@@ -88,7 +88,7 @@ module                               Action、Schema、表归属声明
 代码注册的 ActionDefinition 派生，每个业务路由要求同名 Permission；持久化层继续做
 Workspace 和会话成员校验。
 
-独立服务启动时向 Identity 注册 Application，并用 `module:im` 权限快照精确对账 16 个
+独立服务启动时向 Identity 注册 Application，并用 `module:im` 权限快照精确对账 17 个
 Permission；对账失败时拒绝启动。IM 仍集成 Domainry 账号体系，但账号集成只存在于
 adapter/assembly 边界，通用会话领域不依赖 Identity SDK。
 
@@ -123,6 +123,7 @@ Authorization: Bearer <domainry-access-token>
 | `im.attachments.read` | `GET /im/attachments/{attachment_id}/content` | 下载成员可访问的附件 |
 | `im.contexts.history.list` | `GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history` | 按外部上下文读取历史 |
 | `im.contexts.history.search` | `GET /im/contexts/{namespace}/{resource_type}/{resource_id}/history/search` | 按外部上下文搜索历史 |
+| `im.contexts.members.update` | `PUT /im/contexts/{namespace}/{resource_type}/{resource_id}/members` | 产品校验业务资源后同步上下文群成员 |
 | `im.contexts.attachments.read` | `GET /im/contexts/{namespace}/{resource_type}/{resource_id}/attachments/{attachment_id}/content` | 校验附件所属上下文后读取 |
 | `im.quick_replies.list` | `GET /im/quick-replies?tag=` | 获取启用中的常用语 |
 | `im.quick_replies.update` | `PUT /im/quick-replies/{key}` | 新增、修改或停用常用语 |

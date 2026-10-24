@@ -26,6 +26,7 @@ const maxRequestBytes = 1024 * 1024
 type Application interface {
 	CreateThread(context.Context, model.Actor, model.CreateThreadRequest) (model.Thread, error)
 	ReplaceThreadMembers(context.Context, model.Actor, string, model.ReplaceThreadMembersRequest) (model.Thread, error)
+	ReplaceContextThreadMembers(context.Context, model.Actor, model.ContextRef, model.ReplaceThreadMembersRequest) (model.Thread, error)
 	ListThreads(context.Context, model.Actor, int) ([]model.Thread, error)
 	SendMessage(context.Context, model.Actor, string, model.CreateMessageRequest) (model.Message, error)
 	ListMessages(context.Context, model.Actor, string, int64, int) (model.MessagePage, error)
@@ -120,6 +121,7 @@ func (h *Handler) actionHandlers() map[string]actorHandler {
 		imapplication.ActionAttachmentsRead:        h.attachment,
 		imapplication.ActionContextHistoryList:     h.contextHistory,
 		imapplication.ActionContextHistorySearch:   h.searchContextHistory,
+		imapplication.ActionContextMembersUpdate:   h.replaceContextThreadMembers,
 		imapplication.ActionContextAttachmentsRead: h.contextAttachment,
 		imapplication.ActionQuickRepliesList:       h.listQuickReplies,
 		imapplication.ActionQuickRepliesUpdate:     h.putQuickReply,
@@ -134,6 +136,16 @@ func (h *Handler) replaceThreadMembers(w http.ResponseWriter, r *http.Request, a
 		return
 	}
 	value, err := h.application.ReplaceThreadMembers(r.Context(), actor, r.PathValue("thread_id"), input)
+	writeResult(w, r, http.StatusOK, value, err)
+}
+
+func (h *Handler) replaceContextThreadMembers(w http.ResponseWriter, r *http.Request, actor model.Actor) {
+	var input model.ReplaceThreadMembersRequest
+	if err := decodeJSON(w, r, &input); err != nil {
+		writeError(w, r, err)
+		return
+	}
+	value, err := h.application.ReplaceContextThreadMembers(r.Context(), actor, contextFromPath(r), input)
 	writeResult(w, r, http.StatusOK, value, err)
 }
 

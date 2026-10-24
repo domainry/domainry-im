@@ -37,6 +37,7 @@ var sha256Hex = regexp.MustCompile(`^[a-fA-F0-9]{64}$`)
 type Repository interface {
 	CreateThread(context.Context, model.Actor, model.Thread) (model.Thread, error)
 	ReplaceThreadMembers(context.Context, model.Actor, string, []string, time.Time) (model.Thread, error)
+	ReplaceContextThreadMembers(context.Context, model.Actor, model.ContextRef, []string, time.Time) (model.Thread, error)
 	ListThreads(context.Context, model.Actor, int) ([]model.Thread, error)
 	AppendMessage(context.Context, model.Actor, string, model.Message) (model.Message, bool, error)
 	ListMessages(context.Context, model.Actor, string, int64, int) (model.MessagePage, error)
@@ -161,6 +162,29 @@ func (s *Service) ReplaceThreadMembers(ctx context.Context, actor model.Actor, t
 		return model.Thread{}, err
 	}
 	value, err := s.repository.ReplaceThreadMembers(ctx, actor, threadID, members, s.now())
+	return value, model.RepositoryError(err)
+}
+
+// ReplaceContextThreadMembers is the product-integration boundary for groups
+// projected from an external business resource. Its exact permission is
+// separate from ordinary member-managed groups, so the integrating product can
+// validate access to the resource before replacing the desired membership.
+func (s *Service) ReplaceContextThreadMembers(ctx context.Context, actor model.Actor, contextRef model.ContextRef, request model.ReplaceThreadMembersRequest) (model.Thread, error) {
+	if err := validateActor(actor); err != nil {
+		return model.Thread{}, err
+	}
+	normalizedContext, err := normalizeContext(contextRef)
+	if err != nil {
+		return model.Thread{}, err
+	}
+	members, err := normalizeMemberIDs(request.MemberIDs)
+	if err != nil {
+		return model.Thread{}, err
+	}
+	if err := s.directory.ValidateMembers(ctx, members); err != nil {
+		return model.Thread{}, err
+	}
+	value, err := s.repository.ReplaceContextThreadMembers(ctx, actor, normalizedContext, members, s.now())
 	return value, model.RepositoryError(err)
 }
 

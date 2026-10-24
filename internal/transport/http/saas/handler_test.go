@@ -167,6 +167,14 @@ func TestGenericExtensionsRemainOpaqueToIM(t *testing.T) {
 	if created.Code != http.StatusOK || thread.Context == nil || thread.Context.ResourceType != "asset" {
 		t.Fatalf("group status=%d value=%#v", created.Code, thread)
 	}
+	updatedMembers := requestJSONAs(t, handler, auditor, http.MethodPut, "/im/contexts/example-product/asset/asset-001/members", map[string]any{
+		"member_ids": []string{"alice", "bob", "auditor"},
+	})
+	var updatedThread model.Thread
+	decode(t, updatedMembers.Body.Bytes(), &updatedThread)
+	if updatedMembers.Code != http.StatusOK || len(updatedThread.MemberIDs) != 3 {
+		t.Fatalf("context members status=%d value=%#v body=%s", updatedMembers.Code, updatedThread, updatedMembers.Body.String())
+	}
 
 	structured := requestJSONAs(t, handler, alice, http.MethodPost, "/im/threads/"+thread.ID+"/messages", map[string]any{
 		"client_message_id": "external-event-001", "kind": "structured",

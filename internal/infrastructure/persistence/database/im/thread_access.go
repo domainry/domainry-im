@@ -13,10 +13,24 @@ import (
 )
 
 func (s *Store) ReplaceThreadMembers(ctx context.Context, actor model.Actor, threadID string, memberIDs []string, changedAt time.Time) (model.Thread, error) {
+	return s.replaceThreadMembers(ctx, actor, threadID, memberIDs, changedAt, true)
+}
+
+func (s *Store) ReplaceContextThreadMembers(ctx context.Context, actor model.Actor, contextRef model.ContextRef, memberIDs []string, changedAt time.Time) (model.Thread, error) {
+	threadID, err := s.contextThreadID(ctx, actor.WorkspaceID, contextRef)
+	if err != nil {
+		return model.Thread{}, err
+	}
+	return s.replaceThreadMembers(ctx, actor, threadID, memberIDs, changedAt, false)
+}
+
+func (s *Store) replaceThreadMembers(ctx context.Context, actor model.Actor, threadID string, memberIDs []string, changedAt time.Time, requireActorMembership bool) (model.Thread, error) {
 	var out model.Thread
 	err := s.write(ctx, func(tx sqlhost.DBTX) error {
-		if err := s.requireMembership(ctx, tx, actor, threadID); err != nil {
-			return err
+		if requireActorMembership {
+			if err := s.requireMembership(ctx, tx, actor, threadID); err != nil {
+				return err
+			}
 		}
 		thread, err := s.loadThreadRecord(ctx, tx, actor.WorkspaceID, threadID)
 		if err != nil {

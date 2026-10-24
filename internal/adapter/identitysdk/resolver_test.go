@@ -48,8 +48,8 @@ func TestPermissionDefinitionsAreExactActionProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 16 {
-		t.Fatalf("definitions=%d want=16", len(definitions))
+	if len(definitions) != 17 {
+		t.Fatalf("definitions=%d want=17", len(definitions))
 	}
 	for _, definition := range definitions {
 		if definition.PermissionKey != definition.ResourceKey+"."+definition.OperationKey || definition.SourceKind != "module_http" {
