@@ -232,3 +232,9 @@ go run ./cmd/im-server
 IM 数据库只保存 `file_id` 和消息侧附件元数据，文件内容、哈希和对象存储引用由独立
 Knowledge 服务管理。生产环境在 Knowledge 配置 AWS S3 或 MinIO；IM 不接触 bucket、
 object key 或对象存储凭据。SSE 是无内存会话状态设计，不需要 Kafka 才能恢复连接。
+
+生产镜像构建入口：
+
+```bash
+docker build -t domainry-im:local .
+```
