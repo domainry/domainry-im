@@ -113,7 +113,7 @@ Authorization: Bearer <domainry-access-token>
 | Permission | 方法与路径 | 用途 |
 |---|---|---|
 | `im.threads.create` | `POST /im/threads` | 创建或取得会话 |
-| `im.threads.list` | `GET /im/threads?limit=50` | 会话与未读数列表 |
+| `im.threads.list` | `GET /im/threads?limit=50&cursor=...` | 会话与未读数的稳定游标分页列表 |
 | `im.threads.members.update` | `PUT /im/threads/{thread_id}/members` | 替换群成员 |
 | `im.messages.send` | `POST /im/threads/{thread_id}/messages` | 幂等发送消息 |
 | `im.messages.list` | `GET /im/threads/{thread_id}/messages?after_sequence=0&limit=50` | 按序补拉消息 |

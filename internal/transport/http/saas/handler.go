@@ -27,7 +27,7 @@ type Application interface {
 	CreateThread(context.Context, model.Actor, model.CreateThreadRequest) (model.Thread, error)
 	ReplaceThreadMembers(context.Context, model.Actor, string, model.ReplaceThreadMembersRequest) (model.Thread, error)
 	ReplaceContextThreadMembers(context.Context, model.Actor, model.ContextRef, model.ReplaceThreadMembersRequest) (model.Thread, error)
-	ListThreads(context.Context, model.Actor, int) ([]model.Thread, error)
+	ListThreads(context.Context, model.Actor, string, int) (model.ThreadPage, error)
 	SendMessage(context.Context, model.Actor, string, model.CreateMessageRequest) (model.Message, error)
 	SendContextMessage(context.Context, model.Actor, model.ContextRef, model.CreateMessageRequest) (model.Message, error)
 	ListMessages(context.Context, model.Actor, string, int64, int) (model.MessagePage, error)
@@ -167,8 +167,8 @@ func (h *Handler) listThreads(w http.ResponseWriter, r *http.Request, actor mode
 		writeError(w, r, model.Invalid("im.query_invalid"))
 		return
 	}
-	values, err := h.application.ListThreads(r.Context(), actor, limit)
-	writeResult(w, r, http.StatusOK, map[string]any{"threads": values}, err)
+	page, err := h.application.ListThreads(r.Context(), actor, strings.TrimSpace(r.URL.Query().Get("cursor")), limit)
+	writeResult(w, r, http.StatusOK, page, err)
 }
 
 func (h *Handler) sendMessage(w http.ResponseWriter, r *http.Request, actor model.Actor) {

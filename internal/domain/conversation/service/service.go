@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"math"
@@ -38,7 +39,7 @@ type Repository interface {
 	CreateThread(context.Context, model.Actor, model.Thread) (model.Thread, error)
 	ReplaceThreadMembers(context.Context, model.Actor, string, []string, time.Time) (model.Thread, error)
 	ReplaceContextThreadMembers(context.Context, model.Actor, model.ContextRef, []string, time.Time) (model.Thread, error)
-	ListThreads(context.Context, model.Actor, int) ([]model.Thread, error)
+	ListThreads(context.Context, model.Actor, *model.ThreadPosition, int) ([]model.Thread, error)
 	AppendMessage(context.Context, model.Actor, string, model.Message) (model.Message, bool, error)
 	AppendContextMessage(context.Context, model.Actor, model.Thread, model.Message) (model.Message, bool, error)
 	ListMessages(context.Context, model.Actor, string, int64, int) (model.MessagePage, error)
@@ -135,16 +136,33 @@ func (s *Service) CreateThread(ctx context.Context, actor model.Actor, request m
 	return result, model.RepositoryError(err)
 }
 
-func (s *Service) ListThreads(ctx context.Context, actor model.Actor, limit int) ([]model.Thread, error) {
+func (s *Service) ListThreads(ctx context.Context, actor model.Actor, cursor string, limit int) (model.ThreadPage, error) {
 	if err := validateActor(actor); err != nil {
-		return nil, err
+		return model.ThreadPage{}, err
 	}
 	limit, err := normalizeLimit(limit)
 	if err != nil {
-		return nil, err
+		return model.ThreadPage{}, err
 	}
-	values, err := s.repository.ListThreads(ctx, actor, limit)
-	return values, model.RepositoryError(err)
+	position, err := decodeThreadCursor(cursor)
+	if err != nil {
+		return model.ThreadPage{}, err
+	}
+	values, err := s.repository.ListThreads(ctx, actor, position, limit+1)
+	if err != nil {
+		return model.ThreadPage{}, model.RepositoryError(err)
+	}
+	page := model.ThreadPage{Threads: values}
+	if len(values) > limit {
+		page.HasMore = true
+		page.Threads = values[:limit]
+		last := page.Threads[len(page.Threads)-1]
+		page.NextCursor, err = encodeThreadCursor(model.ThreadPosition{UpdatedAt: last.UpdatedAt, ThreadID: last.ID})
+		if err != nil {
+			return model.ThreadPage{}, err
+		}
+	}
+	return page, nil
 }
 
 func (s *Service) ReplaceThreadMembers(ctx context.Context, actor model.Actor, threadID string, request model.ReplaceThreadMembersRequest) (model.Thread, error) {
@@ -536,6 +554,38 @@ func normalizeLimit(limit int) (int, error) {
 		return 0, model.Invalid("im.limit_invalid")
 	}
 	return limit, nil
+}
+
+type threadCursorEnvelope struct {
+	UpdatedAtMS int64  `json:"updated_at_ms"`
+	ThreadID    string `json:"thread_id"`
+}
+
+func encodeThreadCursor(position model.ThreadPosition) (string, error) {
+	if position.UpdatedAt.IsZero() || !stableID.MatchString(position.ThreadID) {
+		return "", model.Invalid("im.cursor_invalid")
+	}
+	raw, err := json.Marshal(threadCursorEnvelope{UpdatedAtMS: position.UpdatedAt.UnixMilli(), ThreadID: position.ThreadID})
+	if err != nil {
+		return "", &model.Error{Class: "internal", Code: "im.cursor_encode_failed", Cause: err}
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func decodeThreadCursor(cursor string) (*model.ThreadPosition, error) {
+	cursor = strings.TrimSpace(cursor)
+	if cursor == "" {
+		return nil, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return nil, model.Invalid("im.cursor_invalid")
+	}
+	var envelope threadCursorEnvelope
+	if err := json.Unmarshal(raw, &envelope); err != nil || envelope.UpdatedAtMS <= 0 || !stableID.MatchString(envelope.ThreadID) {
+		return nil, model.Invalid("im.cursor_invalid")
+	}
+	return &model.ThreadPosition{UpdatedAt: time.UnixMilli(envelope.UpdatedAtMS).UTC(), ThreadID: envelope.ThreadID}, nil
 }
 
 func normalizeContext(value model.ContextRef) (model.ContextRef, error) {

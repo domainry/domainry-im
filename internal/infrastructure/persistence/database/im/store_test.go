@@ -121,6 +121,26 @@ func TestConcurrentAppendsHaveContinuousSequences(t *testing.T) {
 	}
 }
 
+func TestThreadListUsesStableCursorAcrossEqualTimestamps(t *testing.T) {
+	store := openStore(t)
+	ctx := context.Background()
+	actor := model.Actor{WorkspaceID: "workspace-a", SubjectID: "user-a"}
+	now := time.Date(2026, 10, 25, 1, 2, 3, 0, time.UTC)
+	for _, id := range []string{"thread-c", "thread-a", "thread-b"} {
+		if _, err := store.CreateThread(ctx, actor, model.Thread{ID: id, Kind: model.ThreadGroup, ClientThreadID: id, MemberIDs: []string{actor.SubjectID}, CreatedAt: now, UpdatedAt: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, err := store.ListThreads(ctx, actor, nil, 2)
+	if err != nil || len(first) != 2 || first[0].ID != "thread-a" || first[1].ID != "thread-b" {
+		t.Fatalf("first=%#v err=%v", first, err)
+	}
+	second, err := store.ListThreads(ctx, actor, &model.ThreadPosition{UpdatedAt: first[1].UpdatedAt, ThreadID: first[1].ID}, 2)
+	if err != nil || len(second) != 1 || second[0].ID != "thread-c" {
+		t.Fatalf("second=%#v err=%v", second, err)
+	}
+}
+
 func TestOpaqueContextHistoryMembershipAndQuickReplies(t *testing.T) {
 	store := openStore(t)
 	ctx := context.Background()

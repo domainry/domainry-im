@@ -73,12 +73,25 @@ func (s *Store) CreateThread(ctx context.Context, actor model.Actor, thread mode
 	return out, err
 }
 
-func (s *Store) ListThreads(ctx context.Context, actor model.Actor, limit int) ([]model.Thread, error) {
+func (s *Store) ListThreads(ctx context.Context, actor model.Actor, position *model.ThreadPosition, limit int) ([]model.Thread, error) {
+	filters := []query.Predicate{
+		query.EqualValue(query.QualifiedColumn("t", "workspace_id"), actor.WorkspaceID),
+		query.EqualValue(query.QualifiedColumn("m", "workspace_id"), actor.WorkspaceID),
+		query.EqualValue(query.QualifiedColumn("m", "subject_id"), actor.SubjectID),
+	}
+	if position != nil {
+		updatedAt := millis(position.UpdatedAt)
+		filters = append(filters, query.Or(
+			query.LessThanValue(query.QualifiedColumn("t", "updated_at_ms"), updatedAt),
+			query.And(
+				query.EqualValue(query.QualifiedColumn("t", "updated_at_ms"), updatedAt),
+				query.GreaterThanExpression(query.QualifiedColumn("t", "thread_id"), position.ThreadID),
+			),
+		))
+	}
 	builder := query.NewSelectBuilder(s.dialect, threadsTable).Alias("t").Projections(
 		query.Project(query.QualifiedColumn("t", "thread_id")), query.Project(query.QualifiedColumn("t", "payload_json")), query.Project(query.QualifiedColumn("t", "last_message_seq")), query.Project(query.QualifiedColumn("m", "last_read_seq")), query.Project(query.QualifiedColumn("t", "created_at_ms")), query.Project(query.QualifiedColumn("t", "updated_at_ms")),
-	).Join(query.InnerJoin(membersTable, "m", query.EqualExpressions(query.QualifiedColumn("m", "thread_id"), query.QualifiedColumn("t", "thread_id")))).Where(query.And(
-		query.EqualValue(query.QualifiedColumn("t", "workspace_id"), actor.WorkspaceID), query.EqualValue(query.QualifiedColumn("m", "workspace_id"), actor.WorkspaceID), query.EqualValue(query.QualifiedColumn("m", "subject_id"), actor.SubjectID),
-	)).OrderBy(query.DescendingExpression(query.QualifiedColumn("t", "updated_at_ms")), query.AscendingExpression(query.QualifiedColumn("t", "thread_id"))).Limit(limit)
+	).Join(query.InnerJoin(membersTable, "m", query.EqualExpressions(query.QualifiedColumn("m", "thread_id"), query.QualifiedColumn("t", "thread_id")))).Where(query.And(filters...)).OrderBy(query.DescendingExpression(query.QualifiedColumn("t", "updated_at_ms")), query.AscendingExpression(query.QualifiedColumn("t", "thread_id"))).Limit(limit)
 	statement, args, err := builder.Build()
 	if err != nil {
 		return nil, err

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -117,6 +118,47 @@ func TestTwoAccountsCanHaveACompleteConversation(t *testing.T) {
 	decode(t, receipts.Body.Bytes(), &receiptList)
 	if receipts.Code != http.StatusOK || !hasReceipt(receiptList.Receipts, "bob", 2) {
 		t.Fatalf("receipts status=%d values=%#v", receipts.Code, receiptList.Receipts)
+	}
+}
+
+func TestThreadListReturnsEveryStableCursorPage(t *testing.T) {
+	actor := model.Actor{WorkspaceID: "workspace-a", SubjectID: "alice", DisplayName: "Alice"}
+	application := openApplicationWithDirectory(t, knownDirectory{"alice": true})
+	handler, err := New(application, contextActorResolver{}, 250*time.Millisecond, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, clientID := range []string{"group-1", "group-2", "group-3"} {
+		response := requestJSONAs(t, handler, actor, http.MethodPost, "/im/threads", map[string]any{"kind": "group", "client_thread_id": clientID, "member_ids": []string{}})
+		if response.Code != http.StatusOK {
+			t.Fatalf("create %s status=%d body=%s", clientID, response.Code, response.Body.String())
+		}
+	}
+	firstResponse := requestAs(t, handler, actor, http.MethodGet, "/im/threads?limit=2", nil)
+	var first model.ThreadPage
+	decode(t, firstResponse.Body.Bytes(), &first)
+	if firstResponse.Code != http.StatusOK || len(first.Threads) != 2 || !first.HasMore || first.NextCursor == "" {
+		t.Fatalf("first status=%d page=%#v body=%s", firstResponse.Code, first, firstResponse.Body.String())
+	}
+	secondResponse := requestAs(t, handler, actor, http.MethodGet, "/im/threads?limit=2&cursor="+url.QueryEscape(first.NextCursor), nil)
+	var second model.ThreadPage
+	decode(t, secondResponse.Body.Bytes(), &second)
+	if secondResponse.Code != http.StatusOK || len(second.Threads) != 1 || second.HasMore || second.NextCursor != "" {
+		t.Fatalf("second status=%d page=%#v body=%s", secondResponse.Code, second, secondResponse.Body.String())
+	}
+	seen := map[string]bool{}
+	for _, thread := range append(first.Threads, second.Threads...) {
+		if seen[thread.ID] {
+			t.Fatalf("duplicate thread %s", thread.ID)
+		}
+		seen[thread.ID] = true
+	}
+	if len(seen) != 3 {
+		t.Fatalf("seen=%v", seen)
+	}
+	invalid := requestAs(t, handler, actor, http.MethodGet, "/im/threads?limit=2&cursor=invalid", nil)
+	if invalid.Code != http.StatusBadRequest || !strings.Contains(invalid.Body.String(), "im.cursor_invalid") {
+		t.Fatalf("invalid status=%d body=%s", invalid.Code, invalid.Body.String())
 	}
 }
 

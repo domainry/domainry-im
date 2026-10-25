@@ -71,6 +71,17 @@ type Thread struct {
 	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
+type ThreadPosition struct {
+	UpdatedAt time.Time
+	ThreadID  string
+}
+
+type ThreadPage struct {
+	Threads    []Thread `json:"threads"`
+	NextCursor string   `json:"next_cursor,omitempty"`
+	HasMore    bool     `json:"has_more"`
+}
+
 // Attachment has a generic transport identity. Capture metadata is optional
 // extension data useful to camera clients, not a required business workflow.
 type Attachment struct {

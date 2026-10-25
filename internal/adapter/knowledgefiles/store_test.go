@@ -15,6 +15,7 @@ type fileServiceStub struct {
 	file    knowledgefiles.File
 	data    []byte
 	binding knowledgefiles.Binding
+	streams int
 }
 
 func (value *fileServiceStub) Upload(_ context.Context, authority knowledgefiles.Authority, input knowledgefiles.Upload) (knowledgefiles.File, error) {
@@ -22,6 +23,18 @@ func (value *fileServiceStub) Upload(_ context.Context, authority knowledgefiles
 	value.file = knowledgefiles.File{ID: "file_0123456789abcdef0123456789abcdef", WorkspaceID: authority.WorkspaceID, CreatedBy: authority.SubjectID, Filename: input.Filename, ContentType: "image/jpeg", SizeBytes: int64(len(input.Data)), SHA256: hex.EncodeToString(sum[:])}
 	value.data = append([]byte(nil), input.Data...)
 	return value.file, nil
+}
+func (value *fileServiceStub) UploadStream(ctx context.Context, authority knowledgefiles.Authority, input knowledgefiles.StreamUpload) (knowledgefiles.File, error) {
+	raw, err := io.ReadAll(input.Content)
+	if err != nil {
+		return knowledgefiles.File{}, err
+	}
+	sum := sha256.Sum256(raw)
+	if int64(len(raw)) != input.SizeBytes || hex.EncodeToString(sum[:]) != input.SHA256 {
+		return knowledgefiles.File{}, io.ErrUnexpectedEOF
+	}
+	value.streams++
+	return value.Upload(ctx, authority, knowledgefiles.Upload{ClientID: input.ClientID, Filename: input.Filename, ContentType: input.ContentType, Data: raw})
 }
 func (value *fileServiceStub) Get(context.Context, knowledgefiles.Authority, string) (knowledgefiles.File, error) {
 	return value.file, nil
@@ -46,6 +59,9 @@ func TestStoreKeepsKnowledgeFileIDAndIMResourceBinding(t *testing.T) {
 	attachment, err := store.Save(t.Context(), actor, "photo.jpg", "image/jpeg", &byteReader{data: content}, 1024)
 	if err != nil || attachment.FileID != files.file.ID {
 		t.Fatalf("attachment=%+v err=%v", attachment, err)
+	}
+	if files.streams != 1 {
+		t.Fatalf("stream uploads=%d", files.streams)
 	}
 	if err = store.Validate(t.Context(), actor, attachment); err != nil {
 		t.Fatal(err)
