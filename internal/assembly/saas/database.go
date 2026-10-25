@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/domainry/domainry-foundation/telemetry"
 	"github.com/domainry/domainry-im/internal/infrastructure/config"
 	ormdialect "github.com/domainry/domainry-orm/dialect"
 	ormdriver "github.com/domainry/domainry-orm/driver"
@@ -38,7 +39,7 @@ func openDatabase(ctx context.Context, settings config.Config) (_ databaseResour
 		if err != nil {
 			return databaseResources{}, err
 		}
-		database, err := sql.Open("sqlite", dsn)
+		database, err := telemetry.OpenObservedSQL("sqlite", dsn, "runtime", nil)
 		if err != nil {
 			return databaseResources{}, err
 		}
@@ -71,7 +72,7 @@ func openDatabase(ctx context.Context, settings config.Config) (_ databaseResour
 			return databaseResources{}, err
 		}
 		connectionConfig.RuntimeParams["search_path"] = dialectValue.Identifier(settings.DatabaseSchema)
-		database := stdlib.OpenDB(*connectionConfig)
+		database := sql.OpenDB(telemetry.WrapSQLConnector(stdlib.GetConnector(*connectionConfig), "runtime", nil))
 		database.SetMaxOpenConns(settings.DatabaseMaxOpenConnections)
 		database.SetMaxIdleConns(settings.DatabaseMaxIdleConnections)
 		database.SetConnMaxLifetime(settings.DatabaseConnectionLifetime)
