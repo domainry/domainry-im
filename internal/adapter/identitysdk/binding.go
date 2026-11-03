@@ -60,7 +60,7 @@ func Open(ctx context.Context, options Options) (identity.Binding, error) {
 	if !ok {
 		return closeRejected(fmt.Errorf("IM SaaS Identity permission snapshot reader is unavailable"))
 	}
-	snapshotRequest := identity.PermissionSourceSnapshotRequest{Application: application, SourceOwner: imapplication.AuthorizationOwner}
+	snapshotRequest := identity.PermissionSourceSnapshotRequest{SourceOwner: imapplication.AuthorizationOwner}
 	snapshot, err := reader.CurrentSourceSnapshot(ctx, snapshotRequest)
 	if err != nil {
 		return closeRejected(fmt.Errorf("read IM Identity permission snapshot: %w", err))
@@ -68,7 +68,7 @@ func Open(ctx context.Context, options Options) (identity.Binding, error) {
 	if err := snapshot.ValidateFor(snapshotRequest); err != nil {
 		return closeRejected(fmt.Errorf("validate IM Identity permission snapshot: %w", err))
 	}
-	request, err := identity.NewPermissionReconcileRequest(application, imapplication.AuthorizationOwner, snapshot.SnapshotHash, definitions)
+	request, err := identity.NewPermissionReconcileRequest(imapplication.AuthorizationOwner, snapshot.SnapshotHash, definitions)
 	if err != nil {
 		return closeRejected(fmt.Errorf("build IM Identity permission snapshot: %w", err))
 	}
@@ -93,7 +93,20 @@ func PermissionDefinitions() ([]identity.PermissionDefinition, error) {
 			continue
 		}
 		permission := action.Permission
-		definitions = append(definitions, identity.PermissionDefinition{PermissionKey: permission.Key, ResourceKey: permission.ResourceKey, OperationKey: permission.OperationKey, Label: permission.Label, Description: permission.Description, Category: permission.Category, SourceKind: action.SourceKind})
+		localized := make(identity.PermissionLocalizedText, len(permission.I18n))
+		for locale, text := range permission.I18n {
+			localized[locale] = identity.PermissionText{
+				ModuleLabel: text.ModuleLabel, GroupLabel: text.GroupLabel, ResourceLabel: text.ResourceLabel,
+				OperationLabel: text.OperationLabel, Label: text.Label, Description: text.Description,
+			}
+		}
+		definitions = append(definitions, identity.PermissionDefinition{
+			PermissionKey: permission.Key, ModuleKey: permission.ModuleKey, GroupKey: permission.GroupKey,
+			ResourceKey: permission.ResourceKey, OperationKey: permission.OperationKey,
+			Label: permission.Label, Description: permission.Description, Category: permission.Category,
+			SourceKind: action.SourceKind, GrantMode: string(permission.GrantMode), ScopeKind: string(permission.ScopeKind),
+			ObjectKey: permission.ObjectKey, DefaultLocale: permission.DefaultLocale, I18n: localized,
+		})
 	}
 	return definitions, nil
 }

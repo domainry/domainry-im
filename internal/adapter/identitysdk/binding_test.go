@@ -29,7 +29,7 @@ func TestOpenRegistersApplicationAndReconcilesEveryIMPermission(t *testing.T) {
 	if opened != binding || factory.opened != app || applications.registered.Application != app {
 		t.Fatalf("application binding was not registered: opened=%v factory=%#v registration=%#v", opened, factory.opened, applications.registered)
 	}
-	if permissions.reconciled.Application != app || permissions.reconciled.SourceOwner != application.AuthorizationOwner || len(permissions.reconciled.Definitions) != 17 {
+	if permissions.reconciled.SourceOwner != application.AuthorizationOwner || len(permissions.reconciled.Definitions) != 17 {
 		t.Fatalf("permission reconcile=%#v", permissions.reconciled)
 	}
 	for _, definition := range permissions.reconciled.Definitions {
@@ -136,13 +136,13 @@ type permissionRegistryTestStub struct {
 }
 
 func (*permissionRegistryTestStub) CurrentSourceSnapshot(_ context.Context, request identity.PermissionSourceSnapshotRequest) (identity.PermissionSourceSnapshot, error) {
-	return identity.PermissionSourceSnapshot{WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner}, nil
+	return identity.PermissionSourceSnapshot{SourceOwner: request.SourceOwner}, nil
 }
 
 func (s *permissionRegistryTestStub) Reconcile(_ context.Context, request identity.PermissionReconcileRequest) (identity.PermissionReconcileReceipt, error) {
 	s.reconciled = request
 	return identity.PermissionReconcileReceipt{
-		WorkspaceID: request.Application.WorkspaceID, SourceOwner: request.SourceOwner,
+		SourceOwner:          request.SourceOwner,
 		PreviousSnapshotHash: request.PreviousSnapshotHash, SnapshotHash: request.SnapshotHash,
 		DefinitionCount: len(request.Definitions), Inserted: len(request.Definitions),
 	}, nil

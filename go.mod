@@ -5,8 +5,8 @@ go 1.26.0
 toolchain go1.26.5
 
 require (
-	github.com/domainry/domainry-foundation v0.2.18
-	github.com/domainry/domainry-identity-sdk v0.1.38
+	github.com/domainry/domainry-foundation v0.2.20
+	github.com/domainry/domainry-identity-sdk v0.1.42
 	github.com/domainry/domainry-knowledge-sdk v0.1.30
 	github.com/domainry/domainry-orm v0.1.34
 	github.com/jackc/pgx/v5 v5.10.0
