@@ -5,9 +5,9 @@ go 1.26.0
 toolchain go1.26.5
 
 require (
-	github.com/domainry/domainry-foundation v0.2.20
-	github.com/domainry/domainry-identity-sdk v0.1.43
-	github.com/domainry/domainry-knowledge-sdk v0.1.30
+	github.com/domainry/domainry-foundation v0.2.21
+	github.com/domainry/domainry-identity-sdk v0.1.45
+	github.com/domainry/domainry-knowledge-sdk v0.1.41
 	github.com/domainry/domainry-orm v0.1.34
 	github.com/jackc/pgx/v5 v5.10.0
 	modernc.org/sqlite v1.57.0
@@ -16,9 +16,9 @@ require (
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/domainry/domainry-integration-sdk v0.1.26 // indirect
-	github.com/domainry/domainry-report-sdk v0.1.29 // indirect
-	github.com/domainry/domainry-tools-sdk v0.1.28 // indirect
+	github.com/domainry/domainry-integration-sdk v0.1.28 // indirect
+	github.com/domainry/domainry-report-sdk v0.1.30 // indirect
+	github.com/domainry/domainry-tools-sdk v0.1.29 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
